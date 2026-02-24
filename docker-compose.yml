@@ -1,0 +1,52 @@
+services:
+  api:
+    image: python:3.12-slim
+    working_dir: /app
+    command: sh -c "pip install -e .[dev] && uvicorn newsletter_api.main:app --host 0.0.0.0 --port 8000"
+    volumes:
+      - ./:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+    env_file:
+      - .env.example
+
+  worker:
+    image: python:3.12-slim
+    working_dir: /app
+    command: sh -c "pip install -e .[dev] && celery -A newsletter_api.worker.celery_app:celery_app worker --loglevel=INFO"
+    volumes:
+      - ./:/app
+    depends_on:
+      - redis
+      - postgres
+    env_file:
+      - .env.example
+
+  beat:
+    image: python:3.12-slim
+    working_dir: /app
+    command: sh -c "pip install -e .[dev] && celery -A newsletter_api.worker.celery_app:celery_app beat --loglevel=INFO"
+    volumes:
+      - ./:/app
+    depends_on:
+      - redis
+      - postgres
+    env_file:
+      - .env.example
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: newsletter
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"

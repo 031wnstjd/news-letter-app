@@ -1,0 +1,20 @@
+{{ subject }}
+{{ badge }}
+
+Hot Issue
+{% for item in hot %}
+- {{ item.title }}
+  {{ item.url }}
+  source: {{ item.source_domain }}
+  {{ item.tldr }}
+{% endfor %}
+
+More
+{% for item in bottom %}
+- {{ item.title }}
+  {{ item.url }}
+  source: {{ item.source_domain }}
+{% endfor %}
+
+만족도: {{ satisfaction_url }}
+구독 해지: {{ unsubscribe_url }}

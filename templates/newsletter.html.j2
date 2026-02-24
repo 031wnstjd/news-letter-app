@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ subject }}</title>
+  </head>
+  <body>
+    <p><strong>{{ badge }}</strong></p>
+
+    <h2>Hot Issue</h2>
+    <ol>
+      {% for item in hot %}
+      <li>
+        <a href="{{ item.url }}">{{ item.title }}</a><br />
+        <small>source: {{ item.source_domain }}</small><br />
+        <p>{{ item.tldr }}</p>
+      </li>
+      {% endfor %}
+    </ol>
+
+    <h2>More</h2>
+    <ol>
+      {% for item in bottom %}
+      <li>
+        <a href="{{ item.url }}">{{ item.title }}</a><br />
+        <small>source: {{ item.source_domain }}</small>
+      </li>
+      {% endfor %}
+    </ol>
+
+    <p><a href="{{ satisfaction_url }}">오늘 뉴스레터 만족도</a></p>
+    <p><a href="{{ unsubscribe_url }}">구독 해지</a></p>
+  </body>
+</html>
