@@ -1,0 +1,165 @@
+version: 1
+updated_at: "2026-02-24"
+policy:
+  ingestion_priority: ["rss", "html"]
+  diversity:
+    max_items_per_org: 3
+    overflow_policy: "downgrade_to_additional_reads"
+  trust_visibility: "medium"
+  community_signal:
+    enabled: true
+    boost_cap_percent: 15
+    no_primary_source_decay: 0.5
+    half_life_hours: 48
+
+sources:
+  official:
+    - name: "OpenAI News"
+      domain: "openai.com"
+      trust_tier: "T1"
+      fetch_type: ["rss", "html"]
+      lang: ["en"]
+      tags: ["llm", "product", "safety"]
+      enabled: true
+    - name: "Google Research"
+      domain: "research.google"
+      trust_tier: "T1"
+      fetch_type: ["rss", "html"]
+      lang: ["en"]
+      tags: ["research", "ai"]
+      enabled: true
+    - name: "Anthropic News"
+      domain: "anthropic.com"
+      trust_tier: "T1"
+      fetch_type: ["rss", "html"]
+      lang: ["en"]
+      tags: ["llm", "safety"]
+      enabled: true
+    - name: "Meta AI"
+      domain: "ai.meta.com"
+      trust_tier: "T1"
+      fetch_type: ["rss", "html"]
+      lang: ["en"]
+      tags: ["research", "infra"]
+      enabled: true
+    - name: "Microsoft News AI"
+      domain: "news.microsoft.com"
+      trust_tier: "T1"
+      fetch_type: ["rss", "html"]
+      lang: ["en"]
+      tags: ["product", "enterprise"]
+      enabled: true
+    - name: "AWS ML Blog"
+      domain: "aws.amazon.com"
+      trust_tier: "T1"
+      fetch_type: ["rss", "html"]
+      lang: ["en"]
+      tags: ["mlops", "infra"]
+      enabled: true
+    - name: "GitHub Blog"
+      domain: "github.blog"
+      trust_tier: "T1"
+      fetch_type: ["rss", "html"]
+      lang: ["en"]
+      tags: ["developer-tools", "platform"]
+      enabled: true
+    - name: "Kubernetes Blog"
+      domain: "kubernetes.io"
+      trust_tier: "T1"
+      fetch_type: ["rss", "html"]
+      lang: ["en"]
+      tags: ["infra", "cloud-native"]
+      enabled: true
+    - name: "Chrome Developers"
+      domain: "developer.chrome.com"
+      trust_tier: "T1"
+      fetch_type: ["rss", "html"]
+      lang: ["en"]
+      tags: ["frontend", "web-platform"]
+      enabled: true
+    - name: "arXiv"
+      domain: "arxiv.org"
+      trust_tier: "T1"
+      fetch_type: ["rss", "html"]
+      lang: ["en"]
+      tags: ["paper", "research"]
+      enabled: true
+
+  community:
+    - name: "Hacker News"
+      domain: "news.ycombinator.com"
+      trust_tier: "T2"
+      fetch_type: ["html"]
+      lang: ["en"]
+      tags: ["community", "curation"]
+      enabled: true
+    - name: "Lobsters"
+      domain: "lobste.rs"
+      trust_tier: "T2"
+      fetch_type: ["rss", "html"]
+      lang: ["en"]
+      tags: ["community", "programming"]
+      enabled: true
+    - name: "Reddit r/programming"
+      domain: "reddit.com/r/programming"
+      trust_tier: "T2"
+      fetch_type: ["rss", "html"]
+      lang: ["en"]
+      tags: ["community", "programming"]
+      enabled: true
+    - name: "Reddit r/MachineLearning"
+      domain: "reddit.com/r/MachineLearning"
+      trust_tier: "T2"
+      fetch_type: ["rss", "html"]
+      lang: ["en"]
+      tags: ["community", "ml"]
+      enabled: true
+    - name: "Reddit r/devops"
+      domain: "reddit.com/r/devops"
+      trust_tier: "T2"
+      fetch_type: ["rss", "html"]
+      lang: ["en"]
+      tags: ["community", "devops"]
+      enabled: true
+    - name: "Techmeme"
+      domain: "techmeme.com"
+      trust_tier: "T2"
+      fetch_type: ["html"]
+      lang: ["en"]
+      tags: ["curation", "tech-news"]
+      enabled: true
+    - name: "Slashdot"
+      domain: "slashdot.org"
+      trust_tier: "T2"
+      fetch_type: ["rss", "html"]
+      lang: ["en"]
+      tags: ["community", "tech-news"]
+      enabled: true
+    - name: "DEV Community"
+      domain: "dev.to"
+      trust_tier: "T2"
+      fetch_type: ["rss", "html"]
+      lang: ["en"]
+      tags: ["community", "developer-content"]
+      enabled: true
+    - name: "daily.dev"
+      domain: "daily.dev"
+      trust_tier: "T2"
+      fetch_type: ["html"]
+      lang: ["en"]
+      tags: ["curation", "developer-news"]
+      enabled: true
+    - name: "Product Hunt Developer Tools"
+      domain: "producthunt.com/topics/developer-tools"
+      trust_tier: "T2"
+      fetch_type: ["html"]
+      lang: ["en"]
+      tags: ["curation", "tools"]
+      enabled: true
+    - name: "요즘IT"
+      domain: "yozm.wishket.com"
+      trust_tier: "T2"
+      fetch_type: ["html"]
+      lang: ["ko"]
+      tags: ["community", "korean-tech"]
+      enabled: true
