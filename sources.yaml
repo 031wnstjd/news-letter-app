@@ -18,6 +18,7 @@ sources:
       domain: "openai.com"
       trust_tier: "T1"
       fetch_type: ["rss", "html"]
+      rss_url: "https://openai.com/news/rss.xml"
       lang: ["en"]
       tags: ["llm", "product", "safety"]
       enabled: true
@@ -53,6 +54,7 @@ sources:
       domain: "aws.amazon.com"
       trust_tier: "T1"
       fetch_type: ["rss", "html"]
+      rss_url: "https://aws.amazon.com/blogs/machine-learning/feed/"
       lang: ["en"]
       tags: ["mlops", "infra"]
       enabled: true
@@ -60,6 +62,7 @@ sources:
       domain: "github.blog"
       trust_tier: "T1"
       fetch_type: ["rss", "html"]
+      rss_url: "https://github.blog/feed/"
       lang: ["en"]
       tags: ["developer-tools", "platform"]
       enabled: true
@@ -67,6 +70,7 @@ sources:
       domain: "kubernetes.io"
       trust_tier: "T1"
       fetch_type: ["rss", "html"]
+      rss_url: "https://kubernetes.io/feed.xml"
       lang: ["en"]
       tags: ["infra", "cloud-native"]
       enabled: true
@@ -74,6 +78,7 @@ sources:
       domain: "developer.chrome.com"
       trust_tier: "T1"
       fetch_type: ["rss", "html"]
+      rss_url: "https://developer.chrome.com/feeds/blog.xml"
       lang: ["en"]
       tags: ["frontend", "web-platform"]
       enabled: true
@@ -81,6 +86,7 @@ sources:
       domain: "arxiv.org"
       trust_tier: "T1"
       fetch_type: ["rss", "html"]
+      rss_url: "https://rss.arxiv.org/rss/cs"
       lang: ["en"]
       tags: ["paper", "research"]
       enabled: true
@@ -89,7 +95,8 @@ sources:
     - name: "Hacker News"
       domain: "news.ycombinator.com"
       trust_tier: "T2"
-      fetch_type: ["html"]
+      fetch_type: ["rss", "html"]
+      rss_url: "https://news.ycombinator.com/rss"
       lang: ["en"]
       tags: ["community", "curation"]
       enabled: true
@@ -97,6 +104,7 @@ sources:
       domain: "lobste.rs"
       trust_tier: "T2"
       fetch_type: ["rss", "html"]
+      rss_url: "https://lobste.rs/rss"
       lang: ["en"]
       tags: ["community", "programming"]
       enabled: true
@@ -104,6 +112,7 @@ sources:
       domain: "reddit.com/r/programming"
       trust_tier: "T2"
       fetch_type: ["rss", "html"]
+      rss_url: "https://www.reddit.com/r/programming/.rss"
       lang: ["en"]
       tags: ["community", "programming"]
       enabled: true
@@ -111,6 +120,7 @@ sources:
       domain: "reddit.com/r/MachineLearning"
       trust_tier: "T2"
       fetch_type: ["rss", "html"]
+      rss_url: "https://www.reddit.com/r/MachineLearning/.rss"
       lang: ["en"]
       tags: ["community", "ml"]
       enabled: true
@@ -118,6 +128,7 @@ sources:
       domain: "reddit.com/r/devops"
       trust_tier: "T2"
       fetch_type: ["rss", "html"]
+      rss_url: "https://www.reddit.com/r/devops/.rss"
       lang: ["en"]
       tags: ["community", "devops"]
       enabled: true
@@ -132,6 +143,7 @@ sources:
       domain: "slashdot.org"
       trust_tier: "T2"
       fetch_type: ["rss", "html"]
+      rss_url: "http://rss.slashdot.org/Slashdot/slashdotMain"
       lang: ["en"]
       tags: ["community", "tech-news"]
       enabled: true
@@ -139,6 +151,7 @@ sources:
       domain: "dev.to"
       trust_tier: "T2"
       fetch_type: ["rss", "html"]
+      rss_url: "https://dev.to/feed"
       lang: ["en"]
       tags: ["community", "developer-content"]
       enabled: true

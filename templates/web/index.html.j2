@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ app_name }}</title>
+    <link rel="stylesheet" href="/static/app.css" />
+  </head>
+  <body>
+    <div class="bg-orb orb-a" aria-hidden="true"></div>
+    <div class="bg-orb orb-b" aria-hidden="true"></div>
+
+    <header class="hero reveal">
+      <p class="kicker">AI/Dev Daily</p>
+      <h1>{{ app_name }}</h1>
+      <p class="subtitle">{{ subtitle }}</p>
+      <button id="previewBtn" class="cta" type="button">오늘의 프리뷰 생성</button>
+      <p id="statusText" class="status" role="status" aria-live="polite"></p>
+    </header>
+
+    <main class="grid reveal">
+      <section class="panel" aria-labelledby="preview-title">
+        <h2 id="preview-title">뉴스레터 프리뷰</h2>
+        <div id="previewMeta" class="meta"></div>
+        <div class="columns">
+          <div>
+            <h3>Hot Issue</h3>
+            <div id="hotList" class="cards"></div>
+          </div>
+          <div>
+            <h3>More</h3>
+            <div id="moreList" class="cards"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="manual-title">
+        <h2 id="manual-title">수동 AI 요약</h2>
+        <form id="manualForm" class="form">
+          <label for="title">제목</label>
+          <input id="title" name="title" required />
+
+          <label for="url">URL</label>
+          <input id="url" name="url" type="url" required />
+
+          <label for="sourceText">본문(요약 대상)</label>
+          <textarea id="sourceText" name="sourceText" rows="7" required></textarea>
+
+          <button class="cta secondary" type="submit">AI 요약 실행</button>
+        </form>
+        <ul id="summaryLines" class="summary-list"></ul>
+      </section>
+    </main>
+
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>
