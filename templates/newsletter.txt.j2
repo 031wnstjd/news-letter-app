@@ -6,7 +6,14 @@
 - {{ item.title }}
   {{ item.url }}
   출처: {{ item.source_domain }}
-  {{ item.tldr }}
+  {% set lines = item.lines or [] %}
+  {% set summary = ((lines[0] if lines|length > 0 else '') ~ ' ' ~ (lines[1] if lines|length > 1 else '')).strip() %}
+  {% if summary %}핵심 정리: {{ summary }}{% endif %}
+  {% if lines|length > 2 %}왜 중요한가: {{ lines[2] }}{% endif %}
+  {% if lines|length > 3 %}실무 적용: {{ lines[3] }}{% endif %}
+  {% for point in lines[4:] %}
+  세부 포인트: {{ point }}
+  {% endfor %}
 {% endfor %}
 
 추가 이슈
@@ -14,6 +21,11 @@
 - {{ item.title }}
   {{ item.url }}
   출처: {{ item.source_domain }}
+  {% set lines = item.lines or [] %}
+  {% set summary = ((lines[0] if lines|length > 0 else '') ~ ' ' ~ (lines[1] if lines|length > 1 else '')).strip() %}
+  {% if summary %}핵심 정리: {{ summary }}{% endif %}
+  {% if lines|length > 2 %}왜 중요한가: {{ lines[2] }}{% endif %}
+  {% if lines|length > 3 %}실무 적용: {{ lines[3] }}{% endif %}
 {% endfor %}
 
 만족도: {{ satisfaction_url }}

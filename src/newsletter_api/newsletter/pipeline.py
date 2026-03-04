@@ -5,6 +5,7 @@ from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
 
 from newsletter_api.dedup.service import should_merge_by_mixed_rule
+from newsletter_api.ingestion.html_fetcher import fetch_article_text
 from newsletter_api.ingestion.pipeline import canonicalize_url
 from newsletter_api.ingestion.rss_fetcher import fetch_rss_items
 from newsletter_api.ranking.allocator import allocate_slots
@@ -93,8 +94,23 @@ def _rank(candidates: list[dict]) -> list[dict]:
     return sorted(candidates, key=lambda x: x.get("score", 0.0), reverse=True)
 
 
+def _build_source_text(item: dict) -> str:
+    article_text = fetch_article_text(item.get("url", ""))
+    feed_summary = (item.get("summary") or "").strip()
+    title = (item.get("title") or "").strip()
+
+    parts: list[str] = []
+    if article_text:
+        parts.append(f"[기사 본문]\n{article_text}")
+    if feed_summary:
+        parts.append(f"[피드 요약]\n{feed_summary}")
+    if title:
+        parts.append(f"[원문 제목]\n{title}")
+    return "\n\n".join(parts).strip()
+
+
 def _summarize_item(item: dict, summarizer: AISummarizer) -> tuple[list[str], bool, str]:
-    text = item.get("summary") or item.get("title") or ""
+    text = _build_source_text(item) or item.get("summary") or item.get("title") or ""
     ai_result = summarizer.summarize_item(item.get("title", ""), text, item.get("url", ""))
     if ai_result.ok:
         return ai_result.lines, True, ai_result.translated_title

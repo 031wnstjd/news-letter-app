@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import re
 
 import httpx
 
@@ -39,8 +40,9 @@ class AISummarizer:
             return SummaryResult(lines=[], ok=False, error="요약할 본문이 비어 있습니다.")
 
         prompt = (
-            "반드시 JSON 객체로만 응답하세요. 키는 정확히 다음 4개만 사용하세요: "
-            "translated_title(string), tldr(array[string] 길이 2), why_it_matters(string), practical_apply(string). "
+            "반드시 JSON 객체로만 응답하세요. 키는 정확히 다음 5개만 사용하세요: "
+            "translated_title(string), tldr(array[string] 길이 2), why_it_matters(string), "
+            "practical_apply(string), key_points(array[string] 길이 2~3). "
             "모든 값은 한국어로 작성하세요.\\n"
             f"원문 제목: {title}\\n원문 URL: {url}\\n원문 내용:\\n{source_text[:5000]}"
         )
@@ -75,12 +77,18 @@ class AISummarizer:
             tldr = parsed.get("tldr", [])
             if not isinstance(tldr, list):
                 tldr = [str(tldr)]
+            key_points = parsed.get("key_points", [])
+            if isinstance(key_points, str):
+                key_points = [key_points]
+            if not isinstance(key_points, list):
+                key_points = []
             lines = [
                 str(tldr[0]) if len(tldr) > 0 else "",
                 str(tldr[1]) if len(tldr) > 1 else "",
                 str(parsed.get("why_it_matters", "")),
                 str(parsed.get("practical_apply", "")),
             ]
+            lines.extend(str(point) for point in key_points[:3])
             lines = [line.strip() for line in lines if line and line.strip()]
             if not lines:
                 return SummaryResult(lines=[], ok=False, error="모델이 비어 있는 요약을 반환했습니다.")
@@ -93,13 +101,49 @@ class AISummarizer:
                 client.close()
 
 
+_WS_RE = re.compile(r"\s+")
+_SENTENCE_RE = re.compile(r"(?<=[.!?。！？])\s+")
+_SECTION_HEADER_RE = re.compile(r"\[[^\]]+\]")
+
+
+def _truncate(value: str, limit: int = 170) -> str:
+    if len(value) <= limit:
+        return value
+    return f"{value[: limit - 1].rstrip()}…"
+
+
+def _pick_sentences(text: str) -> list[str]:
+    normalized = _WS_RE.sub(" ", text).strip()
+    normalized = _SECTION_HEADER_RE.sub(" ", normalized)
+    parts = [p.strip() for p in _SENTENCE_RE.split(normalized) if p.strip()]
+    parts = [p for p in parts if len(p) >= 18]
+    if parts:
+        return parts
+
+    if not normalized:
+        return []
+
+    chunked = []
+    cursor = 0
+    while cursor < len(normalized) and len(chunked) < 3:
+        chunked.append(normalized[cursor : cursor + 150].strip())
+        cursor += 150
+    return [c for c in chunked if c]
+
+
 def summarize_text(text: str) -> SummaryResult:
     if not text.strip():
         return SummaryResult(lines=[], ok=False, error="요약할 본문이 비어 있습니다.")
-    # API 키가 없거나 모델 응답이 실패한 경우에 사용하는 한국어 기본 요약.
+    sentences = _pick_sentences(text)
+    first = _truncate(sentences[0]) if len(sentences) > 0 else "원문에서 핵심 내용을 추출했습니다."
+    second = _truncate(sentences[1]) if len(sentences) > 1 else _truncate(first)
+    third = _truncate(sentences[2]) if len(sentences) > 2 else "세부 맥락은 원문 링크에서 함께 확인하는 것이 좋습니다."
+
     lines = [
-        "핵심 요약: 입력된 내용을 바탕으로 주요 변경점과 맥락을 정리했습니다.",
-        "왜 중요한가: 실무 팀의 우선순위와 기술 선택에 영향을 줍니다.",
-        "실무 적용: 스테이징 환경에서 영향 범위를 먼저 검증하세요.",
+        f"핵심 요약 1: {first}",
+        f"핵심 요약 2: {second}",
+        f"왜 중요한가: {third}",
+        "실무 적용: 영향 받는 서비스와 기능 플래그를 먼저 식별한 뒤 스테이징에서 회귀 테스트를 권장합니다.",
+        "세부 포인트: 변경 전후 지표(지연 시간, 오류율, 비용)를 같은 조건에서 비교해 검증하세요.",
     ]
     return SummaryResult(lines=lines, ok=True)

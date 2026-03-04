@@ -138,8 +138,41 @@ h1 {
   text-decoration: underline;
 }
 
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 6px;
+}
+
 .card small {
   color: #0369a1;
+}
+
+.card-block {
+  margin-top: 10px;
+}
+
+.card-block strong {
+  display: block;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  color: #075985;
+}
+
+.card-block p {
+  margin: 4px 0 0;
+  line-height: 1.55;
+}
+
+.card-point-list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.card-point-list li {
+  margin: 3px 0;
+  line-height: 1.45;
 }
 
 .form {

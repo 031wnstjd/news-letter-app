@@ -14,7 +14,25 @@
       <li>
         <a href="{{ item.url }}">{{ item.title }}</a><br />
         <small>출처: {{ item.source_domain }}</small><br />
-        <p>{{ item.tldr }}</p>
+        {% set lines = item.lines or [] %}
+        {% set summary = ((lines[0] if lines|length > 0 else '') ~ ' ' ~ (lines[1] if lines|length > 1 else '')).strip() %}
+        {% if summary %}
+        <p><strong>핵심 정리:</strong> {{ summary }}</p>
+        {% endif %}
+        {% if lines|length > 2 %}
+        <p><strong>왜 중요한가:</strong> {{ lines[2] }}</p>
+        {% endif %}
+        {% if lines|length > 3 %}
+        <p><strong>실무 적용:</strong> {{ lines[3] }}</p>
+        {% endif %}
+        {% if lines|length > 4 %}
+        <p><strong>세부 포인트:</strong></p>
+        <ul>
+          {% for point in lines[4:] %}
+          <li>{{ point }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
       </li>
       {% endfor %}
     </ol>
@@ -24,7 +42,18 @@
       {% for item in bottom %}
       <li>
         <a href="{{ item.url }}">{{ item.title }}</a><br />
-        <small>출처: {{ item.source_domain }}</small>
+        <small>출처: {{ item.source_domain }}</small><br />
+        {% set lines = item.lines or [] %}
+        {% set summary = ((lines[0] if lines|length > 0 else '') ~ ' ' ~ (lines[1] if lines|length > 1 else '')).strip() %}
+        {% if summary %}
+        <p><strong>핵심 정리:</strong> {{ summary }}</p>
+        {% endif %}
+        {% if lines|length > 2 %}
+        <p><strong>왜 중요한가:</strong> {{ lines[2] }}</p>
+        {% endif %}
+        {% if lines|length > 3 %}
+        <p><strong>실무 적용:</strong> {{ lines[3] }}</p>
+        {% endif %}
       </li>
       {% endfor %}
     </ol>
