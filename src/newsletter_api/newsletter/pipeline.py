@@ -324,6 +324,11 @@ def _emit_progress(callback: ProgressCallback | None, payload: dict) -> None:
         return
 
 
+def _is_timeout_error(message: str) -> bool:
+    lowered = message.lower()
+    return "시간이 초과" in message or "timeout" in lowered or "timed out" in lowered
+
+
 def build_daily_newsletter(limit: int = 8, progress_callback: ProgressCallback | None = None) -> dict:
     _emit_progress(
         progress_callback,
@@ -397,7 +402,7 @@ def build_daily_newsletter(limit: int = 8, progress_callback: ProgressCallback |
             },
         )
 
-    max_workers = max(1, min(4, total))
+    max_workers = max(1, min(2, total))
     completed = 0
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_map = {executor.submit(_summarize_job, item): idx for idx, item in enumerate(picked)}
@@ -429,13 +434,14 @@ def build_daily_newsletter(limit: int = 8, progress_callback: ProgressCallback |
 
     hot = ordered_rendered[:2]
     bottom = ordered_rendered[2:]
+    visible_ai_errors = [error for error in ai_errors if error and not _is_timeout_error(error)]
     result = {
         "subject": f"[AI 개발 데일리] {datetime.now().date()} - 오늘의 핵심 {len(ordered_rendered)}개",
         "badge": f"오늘은 검증 통과 {len(ordered_rendered)}개 발행",
         "hot": hot,
         "bottom": bottom,
         "ai_used": ai_used,
-        "ai_error": "" if ai_used else (ai_errors[0] if ai_errors else ""),
+        "ai_error": "" if ai_used else (visible_ai_errors[0] if visible_ai_errors else ""),
     }
     _emit_progress(
         progress_callback,

@@ -134,9 +134,13 @@ function renderCards(container, items) {
 }
 
 function renderPreviewPayload(data) {
-  const aiState = data.ai_used ? '예' : '아니오';
-  const aiReason = !data.ai_used && data.ai_error ? ` | AI 실패 원인: ${data.ai_error}` : '';
-  previewMeta.textContent = `${data.subject || '프리뷰'} | ${data.badge || ''} | AI 요약 사용: ${aiState}${aiReason}`;
+  let summaryMode = 'AI 요약 적용';
+  if (!data.ai_used && data.ai_error) {
+    summaryMode = `대체 요약 적용(${data.ai_error})`;
+  } else if (!data.ai_used) {
+    summaryMode = '대체 요약 적용';
+  }
+  previewMeta.textContent = `${data.subject || '프리뷰'} | ${data.badge || ''} | ${summaryMode}`;
   renderCards(hotList, data.hot || []);
   renderCards(moreList, data.bottom || []);
 }

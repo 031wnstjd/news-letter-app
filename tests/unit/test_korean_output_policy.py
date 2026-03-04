@@ -168,6 +168,39 @@ def test_preview_exposes_ai_error_when_all_ai_calls_fail(monkeypatch):
     assert "OPENAI_API_KEY" in result['ai_error']
 
 
+def test_preview_hides_timeout_error_when_fallback_succeeds(monkeypatch):
+    monkeypatch.setattr(
+        'newsletter_api.newsletter.pipeline._collect_candidates',
+        lambda *args, **kwargs: [
+            {
+                'title': '타임아웃 테스트 제목',
+                'url': 'https://example.com/a',
+                'summary': '타임아웃이 발생해도 대체 요약이 생성되어야 합니다.',
+                'published': '',
+                'source_domain': 'example.com',
+                'category': 'LLM/Agent',
+                'trust_tier': 'T1',
+                'canonical_url': 'https://example.com/a',
+                'age_hours': 1,
+                'score': 0.9,
+            }
+        ],
+    )
+    monkeypatch.setattr('newsletter_api.newsletter.pipeline.fetch_article_text', lambda _url, **_kwargs: "")
+
+    def fake_timeout(_self, title, source_text, url):
+        return SummaryResult(lines=[], ok=False, error="OpenAI 응답 시간이 초과되었습니다.")
+
+    monkeypatch.setattr('newsletter_api.newsletter.pipeline.AISummarizer.summarize_item', fake_timeout)
+
+    result = build_daily_newsletter(limit=1)
+    assert result['ai_used'] is False
+    assert result['ai_error'] == ""
+    assert result['hot'] or result['bottom']
+    first = (result['hot'] + result['bottom'])[0]
+    assert len(first['lines']) >= 5
+
+
 def test_preview_reports_progress_events(monkeypatch):
     monkeypatch.setattr(
         'newsletter_api.newsletter.pipeline._collect_candidates',
