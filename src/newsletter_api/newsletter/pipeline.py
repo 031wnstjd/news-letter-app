@@ -143,59 +143,117 @@ def _summarize_item(item: dict, summarizer: AISummarizer) -> tuple[list[str], bo
 
 
 def _strip_label(text: str) -> str:
-    for prefix in ("핵심 요약 1:", "핵심 요약 2:", "왜 중요한가:", "실무 적용:", "핵심 내용:", "리스크:", "실행 체크:"):
+    for prefix in (
+        "리드:",
+        "무엇이 나왔나:",
+        "핵심 사실:",
+        "중요한 이유:",
+        "실무 적용:",
+        "주의사항:",
+        "출처 메모:",
+        "핵심 요약 1:",
+        "핵심 요약 2:",
+        "왜 중요한가:",
+        "핵심 내용:",
+        "리스크:",
+        "실행 체크:",
+    ):
         if text.startswith(prefix):
             return text[len(prefix) :].strip()
     return text.strip()
 
 
-def _split_detail_sections(lines: list[str]) -> tuple[list[str], list[str], list[str]]:
-    core_points: list[str] = []
-    risks: list[str] = []
-    check_items: list[str] = []
-    for line in lines[4:]:
-        if line.startswith("리스크:"):
-            risks.append(_strip_label(line))
-            continue
-        if line.startswith("실행 체크:"):
-            check_items.append(_strip_label(line))
-            continue
-        core_points.append(_strip_label(line))
-    return core_points, risks, check_items
+def _collect_prefixed(lines: list[str], prefix: str) -> list[str]:
+    return [_strip_label(line) for line in lines if line.startswith(prefix)]
+
+
+def _extract_sections(lines: list[str]) -> dict[str, list[str] | str]:
+    lead = _collect_prefixed(lines, "리드:")
+    what_happened = _collect_prefixed(lines, "무엇이 나왔나:")
+    key_facts = _collect_prefixed(lines, "핵심 사실:")
+    why = _collect_prefixed(lines, "중요한 이유:")
+    practical = _collect_prefixed(lines, "실무 적용:")
+    caveats = _collect_prefixed(lines, "주의사항:")
+    source_notes = _collect_prefixed(lines, "출처 메모:")
+
+    if not what_happened and len(lines) >= 2:
+        what_happened = [_strip_label(lines[0]), _strip_label(lines[1])]
+    if not key_facts:
+        key_facts = _collect_prefixed(lines, "핵심 내용:")
+    if not why and len(lines) > 2:
+        why = [_strip_label(lines[2])]
+    if not practical and len(lines) > 3:
+        practical = [_strip_label(lines[3])]
+    if not caveats:
+        caveats = _collect_prefixed(lines, "리스크:")
+    if not practical:
+        practical = _collect_prefixed(lines, "실행 체크:")
+
+    return {
+        "lead": lead[0] if lead else "",
+        "what_happened": what_happened,
+        "key_facts": key_facts,
+        "why": why,
+        "practical": practical,
+        "caveats": caveats,
+        "source_notes": source_notes,
+    }
 
 
 def _to_view(item: dict, lines: list[str], display_title: str) -> dict:
     tldr = " ".join(lines[:2]).strip() if lines else ""
-    summary_points = [_strip_label(line) for line in lines[:2] if line]
-    why_it_matters = _strip_label(lines[2]) if len(lines) > 2 else ""
-    practical_apply = _strip_label(lines[3]) if len(lines) > 3 else ""
-    core_points, risks, check_items = _split_detail_sections(lines)
+    sections = _extract_sections(lines)
+    lead = str(sections["lead"])
+    what_happened = list(sections["what_happened"])
+    key_facts = list(sections["key_facts"])
+    why = list(sections["why"])
+    practical = list(sections["practical"])
+    caveats = list(sections["caveats"])
+    source_notes = list(sections["source_notes"])
 
-    markdown_lines = ["### 한눈에 보기"]
-    if summary_points:
-        markdown_lines.extend(f"- {point}" for point in summary_points)
+    markdown_lines = ["### 🧭 먼저 결론"]
+    if lead:
+        markdown_lines.append(f"> {lead}")
     else:
-        markdown_lines.append("- 핵심 요약을 생성하지 못했습니다.")
-    markdown_lines.extend(["", "### 기사 핵심 내용"])
-    if core_points:
-        markdown_lines.extend(f"- {point}" for point in core_points)
+        markdown_lines.append("> 이번 이슈의 핵심 흐름을 먼저 확인하세요.")
+
+    markdown_lines.extend(["", "### 1) 이번 이슈에서 실제로 나온 것"])
+    if what_happened:
+        markdown_lines.extend(f"- {point}" for point in what_happened)
     else:
-        markdown_lines.append("- 본문 핵심 포인트를 추출하지 못했습니다.")
-    markdown_lines.extend(["", "### 왜 중요한가", why_it_matters or "현재 이슈의 영향 범위를 추가 검토해야 합니다.", ""])
-    markdown_lines.append("### 실무 적용 체크리스트")
-    apply_steps = [step for step in [practical_apply, *check_items] if step and step.strip()]
-    markdown_lines.extend(f"{idx}. {step}" for idx, step in enumerate(apply_steps, start=1))
-    if not apply_steps:
-        markdown_lines.append("1. 원문 근거를 다시 확인한 뒤 적용 여부를 판단하세요.")
-    markdown_lines.extend(["", "### 리스크·주의사항"])
-    if risks:
-        markdown_lines.extend(f"- {risk}" for risk in risks)
+        markdown_lines.append("- 본문에서 확인된 변경 사항을 요약하지 못했습니다.")
+
+    markdown_lines.extend(["", "### 2) 기사에서 확인된 핵심 사실"])
+    if key_facts:
+        markdown_lines.extend(f"- {point}" for point in key_facts)
     else:
-        markdown_lines.append("- 운영 환경 반영 전 영향 범위와 롤백 전략을 함께 점검하세요.")
+        markdown_lines.append("- 핵심 사실을 충분히 추출하지 못했습니다.")
+
+    markdown_lines.extend(["", "### 3) 왜 중요한가"])
+    if why:
+        markdown_lines.extend(f"- {point}" for point in why)
+    else:
+        markdown_lines.append("- 팀 우선순위와 운영 안정성 관점에서 추가 검토가 필요합니다.")
+
+    markdown_lines.extend(["", "### 4) 실무 적용 가이드"])
+    if practical:
+        markdown_lines.extend(f"{idx}. {step}" for idx, step in enumerate(practical, start=1))
+    else:
+        markdown_lines.append("1. 원문 근거를 재확인한 뒤 적용 범위와 롤백 전략을 먼저 정의하세요.")
+
+    markdown_lines.extend(["", "### 5) 주의할 점"])
+    if caveats:
+        markdown_lines.extend(f"- {risk}" for risk in caveats)
+    else:
+        markdown_lines.append("- 운영 환경 반영 전 영향 범위와 장애 대응 시나리오를 점검하세요.")
+
+    if source_notes:
+        markdown_lines.extend(["", "### 6) 출처 메모"])
+        markdown_lines.extend(f"- {note}" for note in source_notes)
     markdown_lines.extend(
         [
             "",
-            "### 참고",
+            "### 원문 링크",
             f"- 출처: {item.get('source_domain', '') or '알 수 없음'}",
             f"- 링크: {item.get('url', '')}",
         ]

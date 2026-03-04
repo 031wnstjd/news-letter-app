@@ -55,6 +55,12 @@ function renderMarkdownToHtml(markdown) {
       return;
     }
 
+    if (line.startsWith('> ')) {
+      closeList();
+      chunks.push(`<blockquote>${formatInlineMarkdown(line.slice(2))}</blockquote>`);
+      return;
+    }
+
     if (line.startsWith('- ')) {
       if (listMode !== 'ul') {
         closeList();

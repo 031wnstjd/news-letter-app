@@ -172,6 +172,15 @@ h1 {
   line-height: 1.55;
 }
 
+.md-view blockquote {
+  margin: 6px 0 10px;
+  border-left: 3px solid #7dd3fc;
+  background: #ecfeff;
+  padding: 8px 10px;
+  border-radius: 0 8px 8px 0;
+  color: #0f172a;
+}
+
 .md-view ul,
 .md-view ol {
   margin: 6px 0 8px;

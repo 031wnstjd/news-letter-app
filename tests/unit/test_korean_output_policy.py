@@ -6,9 +6,9 @@ def test_fallback_summary_lines_are_korean():
     result = summarize_text('Engineers shipped a new distributed runtime update.')
     assert result.ok is True
     assert any('핵심' in line or '중요' in line or '적용' in line for line in result.lines)
-    assert any(line.startswith('핵심 내용:') for line in result.lines)
-    assert any(line.startswith('리스크:') for line in result.lines)
-    assert any(line.startswith('실행 체크:') for line in result.lines)
+    assert any(line.startswith('핵심 사실:') for line in result.lines)
+    assert any(line.startswith('주의사항:') for line in result.lines)
+    assert any(line.startswith('실무 적용:') for line in result.lines)
 
 
 def test_fallback_summary_reflects_input_text():
@@ -26,7 +26,7 @@ def test_fallback_summary_keeps_korean_style_on_english_body():
     )
     result = summarize_text(english_text)
     assert result.ok is True
-    assert result.lines[0].startswith("핵심 요약")
+    assert result.lines[0].startswith("리드:")
     assert "Posted on Mar" not in " ".join(result.lines)
 
 
@@ -63,7 +63,14 @@ def test_preview_prefers_korean_translated_title(monkeypatch):
 
     def fake_summarize_item(_self, title, source_text, url):
         return SummaryResult(
-            lines=['요약 1', '요약 2', '왜 중요한가', '실무 적용'],
+            lines=[
+                '리드: 요약 리드',
+                '무엇이 나왔나: 변경 1',
+                '핵심 사실: 사실 1',
+                '중요한 이유: 이유 1',
+                '실무 적용: 적용 1',
+                '주의사항: 주의 1',
+            ],
             ok=True,
             translated_title='번역된 제목',
         )
@@ -74,10 +81,10 @@ def test_preview_prefers_korean_translated_title(monkeypatch):
     result = build_daily_newsletter(limit=2)
     assert result['hot'][0]['title'] == '번역된 제목'
     assert result['subject'].startswith('[AI 개발 데일리]')
-    assert "### 한눈에 보기" in result['hot'][0]['markdown']
-    assert "### 기사 핵심 내용" in result['hot'][0]['markdown']
-    assert "### 실무 적용 체크리스트" in result['hot'][0]['markdown']
-    assert "### 리스크·주의사항" in result['hot'][0]['markdown']
+    assert "### 🧭 먼저 결론" in result['hot'][0]['markdown']
+    assert "### 2) 기사에서 확인된 핵심 사실" in result['hot'][0]['markdown']
+    assert "### 4) 실무 적용 가이드" in result['hot'][0]['markdown']
+    assert "### 5) 주의할 점" in result['hot'][0]['markdown']
 
 
 def test_preview_uses_article_body_for_ai_input(monkeypatch):
@@ -109,13 +116,13 @@ def test_preview_uses_article_body_for_ai_input(monkeypatch):
         captured['source_text'] = source_text
         return SummaryResult(
             lines=[
-                '핵심 요약 1: 요약 1',
-                '핵심 요약 2: 요약 2',
-                '왜 중요한가: 왜 중요한가',
-                '실무 적용: 실무 적용',
-                '핵심 내용: 세부 포인트 1',
-                '리스크: 리스크 1',
-                '실행 체크: 체크 1',
+                '리드: 요약 리드',
+                '무엇이 나왔나: 변경 1',
+                '핵심 사실: 사실 1',
+                '중요한 이유: 이유 1',
+                '실무 적용: 적용 1',
+                '주의사항: 주의 1',
+                '출처 메모: 메모 1',
             ],
             ok=True,
             translated_title='번역된 제목',
@@ -127,8 +134,8 @@ def test_preview_uses_article_body_for_ai_input(monkeypatch):
     assert "실제 본문 내용" in captured['source_text']
     assert "RSS 요약 텍스트" in captured['source_text']
     assert len(result['hot'][0]['lines']) >= 7
-    assert "### 참고" in result['hot'][0]['markdown']
-    assert "### 리스크·주의사항" in result['hot'][0]['markdown']
+    assert "### 6) 출처 메모" in result['hot'][0]['markdown']
+    assert "### 원문 링크" in result['hot'][0]['markdown']
 
 
 def test_preview_exposes_ai_error_when_all_ai_calls_fail(monkeypatch):

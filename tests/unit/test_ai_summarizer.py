@@ -15,9 +15,13 @@ def test_ai_summarizer_parses_model_json_response():
                     'message': {
                         'content': json.dumps(
                             {
-                                'tldr': ['line1', 'line2'],
-                                'why_it_matters': 'important',
-                                'practical_apply': 'do this',
+                                'lead': '핵심 리드',
+                                'what_happened': ['변경점 1', '변경점 2'],
+                                'key_facts': ['사실 1', '사실 2'],
+                                'why_it_matters': ['중요성 1'],
+                                'practical_steps': ['적용 1'],
+                                'caveats': ['주의 1'],
+                                'source_notes': ['메모 1'],
                             }
                         )
                     }
@@ -36,10 +40,11 @@ def test_ai_summarizer_parses_model_json_response():
     )
 
     assert result.ok is True
-    assert result.lines[0] == 'line1'
-    assert result.lines[1] == 'line2'
-    assert result.lines[2] == 'important'
-    assert result.lines[3] == 'do this'
+    assert result.lines[0] == '리드: 핵심 리드'
+    assert result.lines[1] == '무엇이 나왔나: 변경점 1'
+    assert result.lines[2] == '무엇이 나왔나: 변경점 2'
+    assert result.lines[3] == '핵심 사실: 사실 1'
+    assert any(line.startswith('주의사항:') for line in result.lines)
 
 
 def test_ai_summarizer_returns_error_without_api_key():
