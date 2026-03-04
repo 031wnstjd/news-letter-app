@@ -33,7 +33,7 @@ def test_fallback_summary_keeps_korean_style_on_english_body():
 def test_preview_prefers_korean_translated_title(monkeypatch):
     monkeypatch.setattr(
         'newsletter_api.newsletter.pipeline._collect_candidates',
-        lambda: [
+        lambda *args, **kwargs: [
             {
                 'title': 'OpenAI releases new API',
                 'url': 'https://example.com/a',
@@ -90,7 +90,7 @@ def test_preview_prefers_korean_translated_title(monkeypatch):
 def test_preview_uses_article_body_for_ai_input(monkeypatch):
     monkeypatch.setattr(
         'newsletter_api.newsletter.pipeline._collect_candidates',
-        lambda: [
+        lambda *args, **kwargs: [
             {
                 'title': 'OpenAI releases new API',
                 'url': 'https://example.com/a',
@@ -141,7 +141,7 @@ def test_preview_uses_article_body_for_ai_input(monkeypatch):
 def test_preview_exposes_ai_error_when_all_ai_calls_fail(monkeypatch):
     monkeypatch.setattr(
         'newsletter_api.newsletter.pipeline._collect_candidates',
-        lambda: [
+        lambda *args, **kwargs: [
             {
                 'title': '테스트 제목',
                 'url': 'https://example.com/a',

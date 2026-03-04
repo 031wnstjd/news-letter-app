@@ -24,7 +24,7 @@ class AISummarizer:
         model: str | None = None,
         base_url: str | None = None,
         client: httpx.Client | None = None,
-        timeout: float = 20.0,
+        timeout: float = 35.0,
     ) -> None:
         settings = Settings()
         self.api_key = api_key if api_key is not None else settings.openai_api_key
@@ -38,79 +38,97 @@ class AISummarizer:
             return SummaryResult(lines=[], ok=False, error="OPENAI_API_KEY가 설정되지 않았습니다.")
         if not source_text.strip():
             return SummaryResult(lines=[], ok=False, error="요약할 본문이 비어 있습니다.")
-
-        prompt = (
-            "반드시 JSON 객체로만 응답하세요. 키는 정확히 다음 8개만 사용하세요: "
-            "translated_title(string), lead(string), what_happened(array[string] 길이 3~5), "
-            "key_facts(array[string] 길이 5~8), why_it_matters(array[string] 길이 2~4), "
-            "practical_steps(array[string] 길이 3~5), caveats(array[string] 길이 2~3), "
-            "source_notes(array[string] 길이 2~4). "
-            "모든 값은 한국어로 작성하고 영어 문장을 그대로 복사하지 말고 한국어로 의역하세요. "
-            "문체는 논문 초록처럼 무겁지 않게, 기술 커뮤니티 브리핑 스타일로 작성하세요. "
-            "사용자는 원문 링크를 보지 않는다고 가정하고 맥락과 실행 포인트를 충분히 담아주세요.\\n"
-            f"원문 제목: {title}\\n원문 URL: {url}\\n원문 내용:\\n{source_text[:5000]}"
-        )
-        payload = {
-            "model": self.model,
-            "temperature": 0.2,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "당신은 기술 뉴스레터 에디터입니다. "
-                        "반드시 한국어로만 작성하고 과장 없이 사실 중심으로 요약하세요. "
-                        "학술 논문체 대신 개발자 커뮤니티 브리핑 스타일로 작성하세요."
-                    ),
-                },
-                {"role": "user", "content": prompt},
-            ],
-        }
         headers = {"Authorization": f"Bearer {self.api_key}"}
 
         own_client = self.client is None
         client = self.client or httpx.Client(timeout=self.timeout)
+        last_error = "OpenAI 요청에 실패했습니다."
         try:
-            response = client.post(f"{self.base_url}/chat/completions", json=payload, headers=headers)
-            response.raise_for_status()
-            content = response.json()["choices"][0]["message"]["content"]
-            content = content.strip()
-            if content.startswith("```"):
-                content = content.strip("`")
-                if content.startswith("json"):
-                    content = content[4:].strip()
-            parsed = json.loads(content)
-            lead = str(parsed.get("lead", "")).strip()
+            for max_chars in (3200, 1600):
+                prompt = (
+                    "반드시 JSON 객체로만 응답하세요. 키는 정확히 다음 8개만 사용하세요: "
+                    "translated_title(string), lead(string), what_happened(array[string] 길이 3~5), "
+                    "key_facts(array[string] 길이 5~8), why_it_matters(array[string] 길이 2~4), "
+                    "practical_steps(array[string] 길이 3~5), caveats(array[string] 길이 2~3), "
+                    "source_notes(array[string] 길이 2~4). "
+                    "모든 값은 한국어로 작성하고 영어 문장을 그대로 복사하지 말고 한국어로 의역하세요. "
+                    "문체는 논문 초록처럼 무겁지 않게, 기술 커뮤니티 브리핑 스타일로 작성하세요. "
+                    "사용자는 원문 링크를 보지 않는다고 가정하고 맥락과 실행 포인트를 충분히 담아주세요.\\n"
+                    f"원문 제목: {title}\\n원문 URL: {url}\\n원문 내용:\\n{source_text[:max_chars]}"
+                )
+                payload = {
+                    "model": self.model,
+                    "temperature": 0.2,
+                    "max_tokens": 900,
+                    "response_format": {"type": "json_object"},
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": (
+                                "당신은 기술 뉴스레터 에디터입니다. "
+                                "반드시 한국어로만 작성하고 과장 없이 사실 중심으로 요약하세요. "
+                                "학술 논문체 대신 개발자 커뮤니티 브리핑 스타일로 작성하세요."
+                            ),
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                }
 
-            def _normalize_list(value: object) -> list[str]:
-                if isinstance(value, str):
-                    value = [value]
-                if not isinstance(value, list):
-                    return []
-                return [str(item).strip() for item in value if str(item).strip()]
+                try:
+                    response = client.post(f"{self.base_url}/chat/completions", json=payload, headers=headers)
+                    response.raise_for_status()
+                    content = str(response.json()["choices"][0]["message"].get("content", "")).strip()
+                    parsed = _parse_json_from_content(content)
+                    if parsed is None:
+                        rescued = _build_lines_from_ai_text(content)
+                        if rescued:
+                            return SummaryResult(lines=rescued, ok=True, translated_title=title)
+                        last_error = "OpenAI 응답 파싱에 실패했습니다."
+                        continue
 
-            what_happened = _normalize_list(parsed.get("what_happened"))[:5]
-            key_facts = _normalize_list(parsed.get("key_facts"))[:8]
-            why_it_matters = _normalize_list(parsed.get("why_it_matters"))[:4]
-            practical_steps = _normalize_list(parsed.get("practical_steps"))[:5]
-            caveats = _normalize_list(parsed.get("caveats"))[:3]
-            source_notes = _normalize_list(parsed.get("source_notes"))[:4]
+                    lead = str(parsed.get("lead", "")).strip()
 
-            lines: list[str] = []
-            if lead:
-                lines.append(f"리드: {lead}")
-            lines.extend(f"무엇이 나왔나: {point}" for point in what_happened)
-            lines.extend(f"핵심 사실: {point}" for point in key_facts)
-            lines.extend(f"중요한 이유: {point}" for point in why_it_matters)
-            lines.extend(f"실무 적용: {point}" for point in practical_steps)
-            lines.extend(f"주의사항: {point}" for point in caveats)
-            lines.extend(f"출처 메모: {point}" for point in source_notes)
-            lines = [line.strip() for line in lines if line and line.strip()]
-            if not lines:
-                return SummaryResult(lines=[], ok=False, error="모델이 비어 있는 요약을 반환했습니다.")
-            translated_title = str(parsed.get("translated_title", "")).strip()
-            return SummaryResult(lines=lines, ok=True, translated_title=translated_title)
-        except Exception:  # noqa: BLE001
-            return SummaryResult(lines=[], ok=False, error="OpenAI 요청에 실패했습니다.")
+                    def _normalize_list(value: object) -> list[str]:
+                        if isinstance(value, str):
+                            value = [value]
+                        if not isinstance(value, list):
+                            return []
+                        return [str(item).strip() for item in value if str(item).strip()]
+
+                    what_happened = _normalize_list(parsed.get("what_happened"))[:5]
+                    key_facts = _normalize_list(parsed.get("key_facts"))[:8]
+                    why_it_matters = _normalize_list(parsed.get("why_it_matters"))[:4]
+                    practical_steps = _normalize_list(parsed.get("practical_steps"))[:5]
+                    caveats = _normalize_list(parsed.get("caveats"))[:3]
+                    source_notes = _normalize_list(parsed.get("source_notes"))[:4]
+
+                    lines: list[str] = []
+                    if lead:
+                        lines.append(f"리드: {lead}")
+                    lines.extend(f"무엇이 나왔나: {point}" for point in what_happened)
+                    lines.extend(f"핵심 사실: {point}" for point in key_facts)
+                    lines.extend(f"중요한 이유: {point}" for point in why_it_matters)
+                    lines.extend(f"실무 적용: {point}" for point in practical_steps)
+                    lines.extend(f"주의사항: {point}" for point in caveats)
+                    lines.extend(f"출처 메모: {point}" for point in source_notes)
+                    lines = [line.strip() for line in lines if line and line.strip()]
+                    if not lines:
+                        last_error = "모델이 비어 있는 요약을 반환했습니다."
+                        continue
+                    translated_title = str(parsed.get("translated_title", "")).strip()
+                    return SummaryResult(lines=lines, ok=True, translated_title=translated_title)
+                except httpx.TimeoutException:
+                    last_error = "OpenAI 응답 시간이 초과되었습니다."
+                    continue
+                except httpx.HTTPStatusError as exc:
+                    status = exc.response.status_code if exc.response is not None else "unknown"
+                    last_error = f"OpenAI HTTP 오류({status})"
+                    continue
+                except Exception:  # noqa: BLE001
+                    last_error = "OpenAI 요청에 실패했습니다."
+                    continue
+
+            return SummaryResult(lines=[], ok=False, error=last_error)
         finally:
             if own_client:
                 client.close()
@@ -219,6 +237,55 @@ def _infer_topic(keywords: list[str]) -> str:
     if lowered & {"postgres", "database", "sql", "redis", "backend"}:
         return "백엔드·데이터"
     return "개발 도구·플랫폼"
+
+
+def _parse_json_from_content(content: str) -> dict | None:
+    text = content.strip()
+    if not text:
+        return None
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if len(lines) >= 3 and lines[0].startswith("```"):
+            text = "\n".join(lines[1:-1]).strip()
+            if text.lower().startswith("json"):
+                text = text[4:].strip()
+    try:
+        parsed = json.loads(text)
+        return parsed if isinstance(parsed, dict) else None
+    except Exception:  # noqa: BLE001
+        pass
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or start >= end:
+        return None
+    try:
+        parsed = json.loads(text[start : end + 1])
+        return parsed if isinstance(parsed, dict) else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _build_lines_from_ai_text(content: str) -> list[str]:
+    cleaned = _WS_RE.sub(" ", content).strip()
+    if not cleaned:
+        return []
+    parts = [p.strip(" -•") for p in re.split(r"(?:\n+|(?<=[.!?。！？])\s+)", content) if p.strip()]
+    parts = [p for p in parts if len(p) >= 8]
+    lead = _truncate(parts[0]) if parts else _truncate(cleaned)
+    what = [_truncate(p) for p in parts[1:4]]
+    facts = [_truncate(p) for p in parts[4:10]]
+    if not what:
+        what = ["모델 응답에서 변경 사항을 추출해 정리했습니다."]
+    if not facts:
+        facts = ["핵심 사실을 자동 추출해 카드 형식으로 재구성했습니다."]
+    lines = [f"리드: {lead}"]
+    lines.extend(f"무엇이 나왔나: {point}" for point in what)
+    lines.extend(f"핵심 사실: {point}" for point in facts)
+    lines.append("중요한 이유: 해당 변경은 팀의 기술 선택과 운영 우선순위에 직접 영향을 줍니다.")
+    lines.append("실무 적용: 현재 워크플로에 미치는 영향을 작은 범위에서 먼저 검증하세요.")
+    lines.append("주의사항: 세부 조건과 예외 케이스는 운영 환경에서 다르게 나타날 수 있습니다.")
+    lines.append("출처 메모: 모델의 자유 서술 응답을 카드 양식에 맞춰 재구성했습니다.")
+    return lines
 
 
 def _find_first_matching_sentence(sentences: list[str], keywords: tuple[str, ...], default: str) -> str:

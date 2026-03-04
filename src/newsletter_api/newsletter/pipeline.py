@@ -66,8 +66,9 @@ def _commercial_penalty(item: dict) -> float:
 def _collect_candidates(limit: int = 120) -> list[dict]:
     groups = load_sources("sources.yaml")
     candidates: list[dict] = []
+    per_source_limit = 6
     for source in [*groups.official, *groups.community]:
-        items = fetch_rss_items(source, limit=10)
+        items = fetch_rss_items(source, limit=per_source_limit)
         for item in items:
             item["canonical_url"] = canonicalize_url(item.get("url", ""))
             item["trust_tier"] = source.get("trust_tier", "T2")
@@ -272,7 +273,8 @@ def _to_view(item: dict, lines: list[str], display_title: str) -> dict:
 
 
 def build_daily_newsletter(limit: int = 8) -> dict:
-    candidates = _rank(_dedup(_collect_candidates()))
+    candidate_limit = max(32, limit * 6)
+    candidates = _rank(_dedup(_collect_candidates(limit=candidate_limit)))
     if not candidates:
         return {
             "subject": f"[AI 개발 데일리] {datetime.now().date()} - 발행할 항목 없음",
@@ -306,5 +308,5 @@ def build_daily_newsletter(limit: int = 8) -> dict:
         "hot": hot,
         "bottom": bottom,
         "ai_used": ai_used,
-        "ai_error": ai_errors[0] if ai_errors else "",
+        "ai_error": "" if ai_used else (ai_errors[0] if ai_errors else ""),
     }

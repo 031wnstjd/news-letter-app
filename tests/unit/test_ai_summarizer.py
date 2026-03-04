@@ -52,3 +52,23 @@ def test_ai_summarizer_returns_error_without_api_key():
     result = summarizer.summarize_item('Title', 'Body', 'https://example.com')
     assert result.ok is False
     assert 'OPENAI_API_KEY' in result.error
+
+
+def test_ai_summarizer_rescues_plain_text_response():
+    def handler(_request: httpx.Request) -> httpx.Response:
+        payload = {
+            'choices': [
+                {
+                    'message': {
+                        'content': '업데이트 핵심은 배포 안정성 개선입니다. 단계적으로 적용하고 지표를 확인하세요.'
+                    }
+                }
+            ]
+        }
+        return httpx.Response(200, json=payload)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    summarizer = AISummarizer(api_key='test-key', model='gpt-4o-mini', client=client)
+    result = summarizer.summarize_item('Test title', 'Body', 'https://example.com')
+    assert result.ok is True
+    assert any(line.startswith('리드:') for line in result.lines)

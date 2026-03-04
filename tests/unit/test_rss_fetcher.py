@@ -16,10 +16,16 @@ class FakeFeed:
 
 
 def test_fetch_rss_items_normalizes_entry_fields(monkeypatch):
-    def fake_parse(url: str):
+    def fake_fetch_xml(url: str, timeout: float = 4.0):
         assert url == 'https://example.com/feed.xml'
+        assert timeout == 4.0
+        return "<rss>dummy</rss>"
+
+    def fake_parse(content: str):
+        assert content == "<rss>dummy</rss>"
         return FakeFeed()
 
+    monkeypatch.setattr('newsletter_api.ingestion.rss_fetcher._fetch_feed_xml', fake_fetch_xml)
     monkeypatch.setattr('newsletter_api.ingestion.rss_fetcher.feedparser.parse', fake_parse)
 
     source = {
@@ -35,3 +41,12 @@ def test_fetch_rss_items_normalizes_entry_fields(monkeypatch):
     assert items[0]['url'] == 'https://example.com/post?utm_source=x'
     assert items[0]['summary'] == 'Summary text'
     assert items[0]['source_domain'] == 'example.com'
+
+
+def test_fetch_rss_items_returns_empty_on_network_error(monkeypatch):
+    def fake_fetch_xml(_url: str, timeout: float = 4.0):
+        raise RuntimeError("network fail")
+
+    monkeypatch.setattr('newsletter_api.ingestion.rss_fetcher._fetch_feed_xml', fake_fetch_xml)
+    source = {'rss_url': 'https://example.com/feed.xml'}
+    assert fetch_rss_items(source) == []
