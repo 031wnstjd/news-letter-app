@@ -114,7 +114,9 @@ async function fetchPreview() {
       throw new Error(data.detail || '프리뷰 생성에 실패했습니다');
     }
 
-    previewMeta.textContent = `${data.subject} | ${data.badge} | AI 요약 사용: ${data.ai_used ? '예' : '아니오'}`;
+    const aiState = data.ai_used ? '예' : '아니오';
+    const aiReason = !data.ai_used && data.ai_error ? ` | AI 실패 원인: ${data.ai_error}` : '';
+    previewMeta.textContent = `${data.subject} | ${data.badge} | AI 요약 사용: ${aiState}${aiReason}`;
     renderCards(hotList, data.hot || []);
     renderCards(moreList, data.bottom || []);
     statusText.textContent = '완료';

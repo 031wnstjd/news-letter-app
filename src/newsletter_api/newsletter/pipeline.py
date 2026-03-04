@@ -133,13 +133,13 @@ def _build_source_text(item: dict) -> str:
     return "\n\n".join(parts).strip()
 
 
-def _summarize_item(item: dict, summarizer: AISummarizer) -> tuple[list[str], bool, str]:
+def _summarize_item(item: dict, summarizer: AISummarizer) -> tuple[list[str], bool, str, str]:
     text = _build_source_text(item) or item.get("summary") or item.get("title") or ""
     ai_result = summarizer.summarize_item(item.get("title", ""), text, item.get("url", ""))
     if ai_result.ok:
-        return ai_result.lines, True, ai_result.translated_title
+        return ai_result.lines, True, ai_result.translated_title, ""
     fallback = summarize_text(text)
-    return fallback.lines, False, ""
+    return fallback.lines, False, "", ai_result.error
 
 
 def _to_view(item: dict, lines: list[str], display_title: str) -> dict:
@@ -199,10 +199,13 @@ def build_daily_newsletter(limit: int = 8) -> dict:
 
     summarizer = AISummarizer()
     ai_used = False
+    ai_errors: list[str] = []
     rendered = []
     for item in picked:
-        lines, used_ai, translated_title = _summarize_item(item, summarizer)
+        lines, used_ai, translated_title, ai_error = _summarize_item(item, summarizer)
         ai_used = ai_used or used_ai
+        if ai_error:
+            ai_errors.append(ai_error)
         display_title = translated_title or item.get("title", "")
         rendered.append(_to_view(item, lines, display_title))
 
@@ -214,4 +217,5 @@ def build_daily_newsletter(limit: int = 8) -> dict:
         "hot": hot,
         "bottom": bottom,
         "ai_used": ai_used,
+        "ai_error": ai_errors[0] if ai_errors else "",
     }

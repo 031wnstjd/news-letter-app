@@ -2,7 +2,7 @@ services:
   api:
     image: python:3.12-slim
     working_dir: /app
-    command: sh -c "pip install -e .[dev] && uvicorn newsletter_api.main:app --host 0.0.0.0 --port 8000"
+    command: sh -c "set -a; [ -f .env ] && . ./.env; set +a; pip install -e .[dev] && uvicorn newsletter_api.main:app --host 0.0.0.0 --port 8000"
     volumes:
       - ./:/app
     ports:
@@ -16,7 +16,7 @@ services:
   worker:
     image: python:3.12-slim
     working_dir: /app
-    command: sh -c "pip install -e .[dev] && celery -A newsletter_api.worker.celery_app:celery_app worker --loglevel=INFO"
+    command: sh -c "set -a; [ -f .env ] && . ./.env; set +a; pip install -e .[dev] && celery -A newsletter_api.worker.celery_app:celery_app worker --loglevel=INFO"
     volumes:
       - ./:/app
     depends_on:
@@ -28,7 +28,7 @@ services:
   beat:
     image: python:3.12-slim
     working_dir: /app
-    command: sh -c "pip install -e .[dev] && celery -A newsletter_api.worker.celery_app:celery_app beat --loglevel=INFO"
+    command: sh -c "set -a; [ -f .env ] && . ./.env; set +a; pip install -e .[dev] && celery -A newsletter_api.worker.celery_app:celery_app beat --loglevel=INFO"
     volumes:
       - ./:/app
     depends_on:

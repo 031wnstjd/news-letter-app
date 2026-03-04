@@ -107,6 +107,7 @@ _WS_RE = re.compile(r"\s+")
 _SENTENCE_RE = re.compile(r"(?<=[.!?。！？])\s+")
 _SECTION_HEADER_RE = re.compile(r"\[[^\]]+\]")
 _HANGUL_RE = re.compile(r"[가-힣]")
+_LATIN_RE = re.compile(r"[A-Za-z]")
 _TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9+._/-]{2,}|[가-힣]{2,}")
 _EN_STOPWORDS = {
     "the",
@@ -124,6 +125,23 @@ _EN_STOPWORDS = {
     "under",
     "using",
     "new",
+    "posted",
+    "post",
+    "read",
+    "comments",
+    "comment",
+    "jan",
+    "feb",
+    "mar",
+    "apr",
+    "may",
+    "jun",
+    "jul",
+    "aug",
+    "sep",
+    "oct",
+    "nov",
+    "dec",
 }
 
 
@@ -171,19 +189,41 @@ def _extract_keywords(text: str, limit: int = 4) -> list[str]:
     return selected
 
 
+def _is_korean_dominant(text: str) -> bool:
+    hangul_count = len(_HANGUL_RE.findall(text))
+    latin_count = len(_LATIN_RE.findall(text))
+    return hangul_count >= 24 or hangul_count > latin_count
+
+
+def _infer_topic(keywords: list[str]) -> str:
+    lowered = {k.lower() for k in keywords}
+    if lowered & {"agent", "llm", "gpt", "openai", "claude", "model", "inference"}:
+        return "AI 모델·에이전트"
+    if lowered & {"kubernetes", "docker", "devops", "cloud", "aws", "azure", "infra"}:
+        return "인프라·DevOps"
+    if lowered & {"react", "vue", "typescript", "javascript", "chrome", "frontend", "web"}:
+        return "웹 프론트엔드"
+    if lowered & {"postgres", "database", "sql", "redis", "backend"}:
+        return "백엔드·데이터"
+    return "개발 도구·플랫폼"
+
+
 def summarize_text(text: str) -> SummaryResult:
     if not text.strip():
         return SummaryResult(lines=[], ok=False, error="요약할 본문이 비어 있습니다.")
-    if _HANGUL_RE.search(text):
-        sentences = _pick_sentences(text)
+    content_text = _SECTION_HEADER_RE.sub(" ", text)
+    content_text = _WS_RE.sub(" ", content_text).strip()
+
+    if _is_korean_dominant(content_text):
+        sentences = _pick_sentences(content_text)
         first = _truncate(sentences[0]) if len(sentences) > 0 else "원문에서 핵심 내용을 추출했습니다."
         second = _truncate(sentences[1]) if len(sentences) > 1 else _truncate(first)
         third = _truncate(sentences[2]) if len(sentences) > 2 else "세부 맥락은 원문 링크에서 함께 확인하는 것이 좋습니다."
     else:
-        keywords = _extract_keywords(text)
-        topic = ", ".join(keywords[:3]) if keywords else "핵심 기술 이슈"
-        first = f"{topic} 관련 주요 업데이트가 공개되었습니다."
-        second = "변경된 기능과 영향 범위를 중심으로 핵심 포인트를 정리했습니다."
+        keywords = _extract_keywords(content_text)
+        topic = _infer_topic(keywords)
+        first = f"{topic} 관련 주요 업데이트가 공유되었습니다."
+        second = "변경된 기능과 실제 적용 시 영향 범위를 중심으로 핵심 포인트를 정리했습니다."
         third = "기술 선택과 우선순위에 영향을 줄 수 있으므로 팀 단위 검토가 필요합니다."
 
     lines = [

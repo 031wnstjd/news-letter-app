@@ -16,6 +16,17 @@ def test_fallback_summary_reflects_input_text():
     assert "콜드스타트" in joined or "30%" in joined
 
 
+def test_fallback_summary_keeps_korean_style_on_english_body():
+    english_text = (
+        "[기사 본문]\nPosted on Mar 4. I built a new vector conversion tool for developers. "
+        "It reduces manual tracing time and improves output consistency."
+    )
+    result = summarize_text(english_text)
+    assert result.ok is True
+    assert result.lines[0].startswith("핵심 요약")
+    assert "Posted on Mar" not in " ".join(result.lines)
+
+
 def test_preview_prefers_korean_translated_title(monkeypatch):
     monkeypatch.setattr(
         'newsletter_api.newsletter.pipeline._collect_candidates',
@@ -104,3 +115,33 @@ def test_preview_uses_article_body_for_ai_input(monkeypatch):
     assert "RSS 요약 텍스트" in captured['source_text']
     assert len(result['hot'][0]['lines']) >= 4
     assert "### 참고" in result['hot'][0]['markdown']
+
+
+def test_preview_exposes_ai_error_when_all_ai_calls_fail(monkeypatch):
+    monkeypatch.setattr(
+        'newsletter_api.newsletter.pipeline._collect_candidates',
+        lambda: [
+            {
+                'title': '테스트 제목',
+                'url': 'https://example.com/a',
+                'summary': '테스트 요약',
+                'published': '',
+                'source_domain': 'example.com',
+                'category': 'LLM/Agent',
+                'trust_tier': 'T1',
+                'canonical_url': 'https://example.com/a',
+                'age_hours': 1,
+                'score': 0.9,
+            }
+        ],
+    )
+    monkeypatch.setattr('newsletter_api.newsletter.pipeline.fetch_article_text', lambda _url: "")
+
+    def fake_fail(_self, title, source_text, url):
+        return SummaryResult(lines=[], ok=False, error="OPENAI_API_KEY가 설정되지 않았습니다.")
+
+    monkeypatch.setattr('newsletter_api.newsletter.pipeline.AISummarizer.summarize_item', fake_fail)
+
+    result = build_daily_newsletter(limit=1)
+    assert result['ai_used'] is False
+    assert "OPENAI_API_KEY" in result['ai_error']
