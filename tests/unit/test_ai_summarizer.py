@@ -72,3 +72,8 @@ def test_ai_summarizer_rescues_plain_text_response():
     result = summarizer.summarize_item('Test title', 'Body', 'https://example.com')
     assert result.ok is True
     assert any(line.startswith('리드:') for line in result.lines)
+
+
+def test_ai_summarizer_default_timeout_is_three_minutes():
+    summarizer = AISummarizer(api_key='test-key')
+    assert summarizer.timeout == 180.0

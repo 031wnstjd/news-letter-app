@@ -24,7 +24,7 @@ class AISummarizer:
         model: str | None = None,
         base_url: str | None = None,
         client: httpx.Client | None = None,
-        timeout: float = 35.0,
+        timeout: float = 180.0,
     ) -> None:
         settings = Settings()
         self.api_key = api_key if api_key is not None else settings.openai_api_key
@@ -120,7 +120,7 @@ class AISummarizer:
                     return SummaryResult(lines=lines, ok=True, translated_title=translated_title)
                 except httpx.TimeoutException:
                     last_error = "OpenAI 응답 시간이 초과되었습니다."
-                    continue
+                    break
                 except httpx.HTTPStatusError as exc:
                     status = exc.response.status_code if exc.response is not None else "unknown"
                     last_error = f"OpenAI HTTP 오류({status})"
