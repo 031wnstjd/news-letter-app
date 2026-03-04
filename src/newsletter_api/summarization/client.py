@@ -140,6 +140,10 @@ _SECTION_HEADER_RE = re.compile(r"\[[^\]]+\]")
 _HANGUL_RE = re.compile(r"[가-힣]")
 _LATIN_RE = re.compile(r"[A-Za-z]")
 _TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9+._/-]{2,}|[가-힣]{2,}")
+_NOISE_SENTENCE_RE = re.compile(
+    r"(?:^posted on\b|read more\b|comments?\b|share\b|subscribe\b|sign in\b|all rights reserved\b)",
+    re.IGNORECASE,
+)
 _EN_STOPWORDS = {
     "the",
     "and",
@@ -297,6 +301,65 @@ def _find_first_matching_sentence(sentences: list[str], keywords: tuple[str, ...
     return default
 
 
+def _is_noise_sentence(sentence: str) -> bool:
+    compact = _WS_RE.sub(" ", sentence).strip()
+    if len(compact) < 18:
+        return True
+    lowered = compact.lower()
+    if _NOISE_SENTENCE_RE.search(lowered):
+        return True
+    if lowered.startswith(("posted on ", "read more", "comments", "share ")):
+        return True
+    return False
+
+
+def _dedup_preserve(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for value in values:
+        key = value.strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(key)
+    return out
+
+
+def _sentence_score(sentence: str) -> float:
+    lowered = sentence.lower()
+    score = 0.0
+    if re.search(r"\d", sentence):
+        score += 2.0
+    if re.search(r"[A-Z][a-z]+", sentence):
+        score += 0.8
+    if any(token in lowered for token in ("launch", "release", "announce", "support", "improve", "reduce", "increase", "timeline", "session", "prompt", "file", "api", "mcp", "npm", "download")):
+        score += 1.2
+    score += min(len(sentence) / 180.0, 1.0)
+    return score
+
+
+def _select_grounded_sentences(sentences: list[str], limit: int, prefer_numeric: bool = False) -> list[str]:
+    if not sentences:
+        return []
+    indexed = list(enumerate(sentences))
+    if prefer_numeric:
+        numeric = [pair for pair in indexed if re.search(r"\d", pair[1])]
+        if numeric:
+            indexed = numeric
+    ranked = sorted(indexed, key=lambda pair: _sentence_score(pair[1]), reverse=True)[:limit]
+    selected_indexes = sorted(index for index, _ in ranked)
+    return [sentences[index] for index in selected_indexes]
+
+
+def _grounded_line(sentence: str) -> str:
+    compact = _truncate(_WS_RE.sub(" ", sentence).strip(), 200)
+    if not compact:
+        return ""
+    if _is_korean_dominant(compact):
+        return compact
+    return f"원문 근거: {compact}"
+
+
 def summarize_text(text: str) -> SummaryResult:
     if not text.strip():
         return SummaryResult(lines=[], ok=False, error="요약할 본문이 비어 있습니다.")
@@ -337,38 +400,52 @@ def summarize_text(text: str) -> SummaryResult:
         ]
         source_notes = ["기사 원문에서 제시한 기능/정책 변경 범위를 기준으로 정리했습니다."]
     else:
-        keywords = _extract_keywords(content_text)
+        keywords = _extract_keywords(content_text, limit=6)
         topic = _infer_topic(keywords)
-        lead = f"{topic} 영역에서 실무자가 바로 확인해야 할 업데이트가 나왔습니다."
-        what_happened = [
-            f"업데이트의 중심은 {topic} 품질과 운영 효율 개선입니다.",
-            "기존 워크플로와 비교했을 때 설정/운영 방식이 달라질 수 있습니다.",
-            "도입 시 팀 단위 협업 방식(개발-리뷰-운영)에도 영향이 생길 수 있습니다.",
-        ]
-        key_facts = [
-            f"업데이트의 목적과 배경은 {topic} 품질 및 운영 효율 개선에 맞춰져 있습니다.",
-            "기존 방식 대비 설정 복잡도, 처리 속도, 유지보수 관점의 차이를 확인해야 합니다.",
-            "도입 시 팀 내 역할 분담(개발·리뷰·운영)과 책임 경계를 명확히 정리할 필요가 있습니다.",
-            "외부 서비스 연동 구간은 장애 전파를 막기 위한 타임아웃·재시도 정책이 중요합니다.",
-            "기능 플래그 또는 점진 배포 전략을 사용해 영향 범위를 통제하는 것이 안전합니다.",
-        ]
+        raw_sentences = _pick_sentences(content_text, max_items=24)
+        sentences = [sentence for sentence in raw_sentences if not _is_noise_sentence(sentence)]
+        sentences = _dedup_preserve(sentences)
+
+        if not sentences:
+            lead = f"{topic} 관련 업데이트를 수집했지만 본문 문장 추출이 제한되어 핵심 신호 중심으로 정리했습니다."
+            what_happened = [f"{topic}와 관련된 변경이 감지되었습니다."]
+            key_facts = [f"원문 텍스트 길이: {len(content_text)}자 (문장 추출 실패)"]
+        else:
+            lead_keywords = ", ".join(keywords[:3]) if keywords else topic
+            lead = f"{topic} 관련 업데이트입니다. 원문 문장 기반으로 핵심을 정리했습니다 ({lead_keywords})."
+            what_candidates = _select_grounded_sentences(sentences, limit=5, prefer_numeric=False)
+            fact_candidates = _select_grounded_sentences(sentences, limit=8, prefer_numeric=True)
+            combined = _dedup_preserve([*fact_candidates, *what_candidates, *sentences])
+            what_happened = [_grounded_line(sentence) for sentence in what_candidates[:5]]
+            key_facts = [_grounded_line(sentence) for sentence in combined[:8]]
+            what_happened = [line for line in what_happened if line]
+            key_facts = [line for line in key_facts if line]
+
+        impact_sentence = _find_first_matching_sentence(
+            sentences,
+            ("improv", "reduc", "increase", "support", "timeline", "session", "deploy", "latency", "cost"),
+            "원문에서 성능·운영 방식에 영향을 주는 변경이 명시되었습니다.",
+        )
         why_points = [
-            "기술 선택과 우선순위에 영향을 줄 수 있으므로 팀 단위 검토가 필요합니다.",
-            "단기 성능뿐 아니라 운영 비용과 장애 대응 난이도까지 함께 평가해야 합니다.",
+            f"기사에서 도입 효과/변경 지점이 직접 언급됩니다: {_grounded_line(impact_sentence)}",
+            "원문 근거 문장을 기준으로 우선순위를 정하면 과장된 해석을 줄일 수 있습니다.",
         ]
+
+        first_fact = key_facts[0] if key_facts else "원문 핵심 문장을 먼저 검토하세요."
+        second_fact = key_facts[1] if len(key_facts) > 1 else first_fact
         practical_steps = [
-            "기존 워크플로와 충돌 가능성이 있는 지점을 먼저 식별한 뒤 단계적으로 적용하세요.",
-            "적용 전 체크리스트(권한, 설정값, 의존성 버전)를 문서화하세요.",
-            "대표 트래픽 시나리오로 성능·안정성 리허설을 진행하세요.",
-            "배포 후 모니터링 대시보드와 알림 임계치를 즉시 점검하세요.",
+            f"아래 핵심 사실 1순위를 검증하세요: {first_fact}",
+            f"핵심 사실 간 충돌 여부를 확인하세요: {second_fact}",
+            "도입 전후로 성능/안정성/운영비용 지표를 같은 조건에서 비교하세요.",
+            "원문의 수치·버전·일정을 사내 기준 문서에 옮길 때 출처 링크를 함께 남기세요.",
         ]
         risk_points = [
-            "초기 설정 누락이나 권한 구성 오류로 기대한 동작이 나오지 않을 수 있습니다.",
-            "운영 환경 전환 시 성능·비용 지표가 예상과 다를 수 있으므로 사전 기준선이 필요합니다.",
+            "영문 원문을 한국어로 옮길 때 용어가 달라질 수 있으니 고유명사와 수치는 원문 그대로 재검증하세요.",
+            "요약 문장만으로 의사결정하지 말고, 영향이 큰 항목은 반드시 원문 맥락(앞뒤 문단)까지 확인하세요.",
         ]
         source_notes = [
-            "영문 원문은 한국어 브리핑 톤으로 재구성했습니다.",
-            "세부 수치·일정은 원문 업데이트에 따라 변동될 수 있습니다.",
+            f"원문에서 추출한 문장 {len(sentences)}개를 기반으로 정보량이 높은 순서로 재구성했습니다.",
+            "모델 응답 실패 시에도 원문 근거 문장을 우선 유지하도록 설계했습니다.",
         ]
 
     if not what_happened:

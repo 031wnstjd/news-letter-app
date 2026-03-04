@@ -136,9 +136,9 @@ function renderCards(container, items) {
 function renderPreviewPayload(data) {
   let summaryMode = 'AI 요약 적용';
   if (!data.ai_used && data.ai_error) {
-    summaryMode = `대체 요약 적용(${data.ai_error})`;
+    summaryMode = `AI 요약 실패(${data.ai_error})`;
   } else if (!data.ai_used) {
-    summaryMode = '대체 요약 적용';
+    summaryMode = 'AI 요약 실패';
   }
   previewMeta.textContent = `${data.subject || '프리뷰'} | ${data.badge || ''} | ${summaryMode}`;
   renderCards(hotList, data.hot || []);

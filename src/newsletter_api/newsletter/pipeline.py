@@ -13,7 +13,7 @@ from newsletter_api.ingestion.rss_fetcher import fetch_rss_items
 from newsletter_api.ranking.allocator import allocate_slots
 from newsletter_api.ranking.scorer import score
 from newsletter_api.sources_loader import load_sources
-from newsletter_api.summarization.client import AISummarizer, summarize_text
+from newsletter_api.summarization.client import AISummarizer
 
 COMMUNITY_PREFERRED_DOMAINS = {
     "news.hada.io",
@@ -182,8 +182,7 @@ def _summarize_item(item: dict, summarizer: AISummarizer) -> tuple[list[str], bo
     ai_result = summarizer.summarize_item(item.get("title", ""), text, item.get("url", ""))
     if ai_result.ok:
         return ai_result.lines, True, ai_result.translated_title, ""
-    fallback = summarize_text(text)
-    return fallback.lines, False, "", ai_result.error
+    return [], False, "", ai_result.error or "AI 요약에 실패했습니다."
 
 
 def _strip_label(text: str) -> str:
@@ -315,6 +314,31 @@ def _to_view(item: dict, lines: list[str], display_title: str) -> dict:
     }
 
 
+def _to_failed_view(item: dict, display_title: str, error_message: str) -> dict:
+    message = (error_message or "알 수 없는 오류").strip()
+    markdown = "\n".join(
+        [
+            "### AI 요약 실패",
+            f"- 사유: {message}",
+            "- 이 카드는 AI 요약 생성에 실패하여 본문을 표시하지 않습니다.",
+            "",
+            "### 원문 링크",
+            f"- 출처: {item.get('source_domain', '') or '알 수 없음'}",
+            f"- 링크: {item.get('url', '')}",
+        ]
+    ).strip()
+    return {
+        "title": display_title,
+        "url": item.get("url", ""),
+        "source_domain": item.get("source_domain", ""),
+        "category": item.get("category", "기타"),
+        "score": round(item.get("score", 0.0), 3),
+        "tldr": "AI 요약 실패",
+        "lines": [],
+        "markdown": markdown,
+    }
+
+
 def _emit_progress(callback: ProgressCallback | None, payload: dict) -> None:
     if not callback:
         return
@@ -322,11 +346,6 @@ def _emit_progress(callback: ProgressCallback | None, payload: dict) -> None:
         callback(payload)
     except Exception:  # noqa: BLE001
         return
-
-
-def _is_timeout_error(message: str) -> bool:
-    lowered = message.lower()
-    return "시간이 초과" in message or "timeout" in lowered or "timed out" in lowered
 
 
 def build_daily_newsletter(limit: int = 8, progress_callback: ProgressCallback | None = None) -> dict:
@@ -414,7 +433,10 @@ def build_daily_newsletter(limit: int = 8, progress_callback: ProgressCallback |
             if ai_error:
                 ai_errors.append(ai_error)
             display_title = translated_title or item.get("title", "")
-            rendered[idx] = _to_view(item, lines, display_title)
+            if used_ai:
+                rendered[idx] = _to_view(item, lines, display_title)
+            else:
+                rendered[idx] = _to_failed_view(item, display_title, ai_error)
             completed += 1
             _emit_progress(
                 progress_callback,
@@ -434,14 +456,13 @@ def build_daily_newsletter(limit: int = 8, progress_callback: ProgressCallback |
 
     hot = ordered_rendered[:2]
     bottom = ordered_rendered[2:]
-    visible_ai_errors = [error for error in ai_errors if error and not _is_timeout_error(error)]
     result = {
         "subject": f"[AI 개발 데일리] {datetime.now().date()} - 오늘의 핵심 {len(ordered_rendered)}개",
         "badge": f"오늘은 검증 통과 {len(ordered_rendered)}개 발행",
         "hot": hot,
         "bottom": bottom,
         "ai_used": ai_used,
-        "ai_error": "" if ai_used else (visible_ai_errors[0] if visible_ai_errors else ""),
+        "ai_error": "" if ai_used else (ai_errors[0] if ai_errors else ""),
     }
     _emit_progress(
         progress_callback,

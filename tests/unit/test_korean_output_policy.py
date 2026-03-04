@@ -30,6 +30,21 @@ def test_fallback_summary_keeps_korean_style_on_english_body():
     assert "Posted on Mar" not in " ".join(result.lines)
 
 
+def test_fallback_summary_is_grounded_to_english_source_content():
+    english_text = (
+        "[기사 본문]\n"
+        "Agentation helps developers click UI elements and generate precise CSS selectors. "
+        "The tool reached 170k npm downloads and supports MCP sync for live feedback loops. "
+        "Readout replays Claude Code sessions with a timeline of prompts, tool calls, and file edits."
+    )
+    result = summarize_text(english_text)
+    assert result.ok is True
+    joined = " ".join(result.lines)
+    assert "Agentation" in joined
+    assert "170k" in joined
+    assert "Readout" in joined
+
+
 def test_preview_prefers_korean_translated_title(monkeypatch):
     monkeypatch.setattr(
         'newsletter_api.newsletter.pipeline._collect_candidates',
@@ -168,14 +183,14 @@ def test_preview_exposes_ai_error_when_all_ai_calls_fail(monkeypatch):
     assert "OPENAI_API_KEY" in result['ai_error']
 
 
-def test_preview_hides_timeout_error_when_fallback_succeeds(monkeypatch):
+def test_preview_marks_item_failed_when_ai_timeout(monkeypatch):
     monkeypatch.setattr(
         'newsletter_api.newsletter.pipeline._collect_candidates',
         lambda *args, **kwargs: [
             {
                 'title': '타임아웃 테스트 제목',
                 'url': 'https://example.com/a',
-                'summary': '타임아웃이 발생해도 대체 요약이 생성되어야 합니다.',
+                'summary': '타임아웃 발생 시 실패 상태를 표시해야 합니다.',
                 'published': '',
                 'source_domain': 'example.com',
                 'category': 'LLM/Agent',
@@ -195,10 +210,11 @@ def test_preview_hides_timeout_error_when_fallback_succeeds(monkeypatch):
 
     result = build_daily_newsletter(limit=1)
     assert result['ai_used'] is False
-    assert result['ai_error'] == ""
+    assert "시간이 초과" in result['ai_error']
     assert result['hot'] or result['bottom']
     first = (result['hot'] + result['bottom'])[0]
-    assert len(first['lines']) >= 5
+    assert first['lines'] == []
+    assert "AI 요약 실패" in first['markdown']
 
 
 def test_preview_reports_progress_events(monkeypatch):
