@@ -93,13 +93,33 @@ function renderMarkdownToHtml(markdown) {
   return chunks.join('');
 }
 
+function buildMarkdownFallback(item) {
+  const lines = Array.isArray(item.lines) ? item.lines.filter((line) => String(line || '').trim()) : [];
+  if (lines.length) {
+    return ['### 핵심 정리', ...lines.map((line) => `- ${line}`)].join('\n');
+  }
+  const tldr = String(item.tldr || '').trim();
+  if (tldr) {
+    return `### 핵심 정리\n- ${tldr}`;
+  }
+  return '### 핵심 정리\n- 카드 본문을 생성 중입니다.';
+}
+
 function renderCards(container, items) {
   container.innerHTML = '';
+  if (!Array.isArray(items) || items.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'empty-cards';
+    empty.textContent = '표시할 카드가 아직 없습니다.';
+    container.appendChild(empty);
+    return;
+  }
   items.forEach((item) => {
     const card = document.createElement('article');
     card.className = 'card';
     const articleUrl = safeUrl(item.url);
-    const markdownHtml = renderMarkdownToHtml(item.markdown || '');
+    const markdownSource = String(item.markdown || '').trim() ? item.markdown : buildMarkdownFallback(item);
+    const markdownHtml = renderMarkdownToHtml(markdownSource);
 
     card.innerHTML = `
       <a href="${escapeHtml(articleUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a>
@@ -111,6 +131,14 @@ function renderCards(container, items) {
     `;
     container.appendChild(card);
   });
+}
+
+function renderPreviewPayload(data) {
+  const aiState = data.ai_used ? '예' : '아니오';
+  const aiReason = !data.ai_used && data.ai_error ? ` | AI 실패 원인: ${data.ai_error}` : '';
+  previewMeta.textContent = `${data.subject || '프리뷰'} | ${data.badge || ''} | AI 요약 사용: ${aiState}${aiReason}`;
+  renderCards(hotList, data.hot || []);
+  renderCards(moreList, data.bottom || []);
 }
 
 async function fetchPreview() {
@@ -128,8 +156,19 @@ async function fetchPreview() {
   previewStream = stream;
   let gotDone = false;
   let errorCount = 0;
+  let fallbackTriggered = false;
+  let lastEventAt = Date.now();
+  const renderedByIndex = new Map();
+  const idleTimer = window.setInterval(() => {
+    if (gotDone) return;
+    const idleSeconds = (Date.now() - lastEventAt) / 1000;
+    if (idleSeconds >= 12) {
+      statusText.textContent = `응답 대기 중... (${Math.floor(idleSeconds)}초)`;
+    }
+  }, 2000);
 
   function finalize() {
+    window.clearInterval(idleTimer);
     if (previewStream) {
       previewStream.close();
       previewStream = null;
@@ -137,9 +176,30 @@ async function fetchPreview() {
     previewBtn.disabled = false;
   }
 
+  async function fetchSnapshotFallback(reason) {
+    if (fallbackTriggered || gotDone) return;
+    fallbackTriggered = true;
+    statusText.textContent = `실시간 연결 복구 중... (${reason})`;
+    try {
+      const res = await fetch(`/v1/newsletter/preview?limit=${PREVIEW_LIMIT}`);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || '프리뷰 조회 실패');
+      }
+      renderPreviewPayload(data);
+      statusText.textContent = '완료';
+      gotDone = true;
+    } catch (err) {
+      statusText.textContent = `오류: ${err.message || '프리뷰 생성 실패'}`;
+    } finally {
+      finalize();
+    }
+  }
+
   stream.addEventListener('progress', (event) => {
     try {
       const data = JSON.parse(event.data || '{}');
+      lastEventAt = Date.now();
       const percent = Number.isFinite(data.percent) ? data.percent : 0;
       const progressText = data.total ? `(${data.current || 0}/${data.total})` : '';
       statusText.textContent = data.message || '처리 중...';
@@ -152,6 +212,15 @@ async function fetchPreview() {
           progressList.removeChild(progressList.lastChild);
         }
       }
+      if (data.stage === 'item_done' && data.item) {
+        const index = Number.isFinite(data.index) ? data.index : renderedByIndex.size;
+        renderedByIndex.set(index, data.item);
+        const ordered = Array.from(renderedByIndex.entries())
+          .sort((a, b) => a[0] - b[0])
+          .map((entry) => entry[1]);
+        renderCards(hotList, ordered.slice(0, 2));
+        renderCards(moreList, ordered.slice(2));
+      }
     } catch (_err) {
       statusText.textContent = '진행 상태를 업데이트하는 중입니다...';
     }
@@ -161,27 +230,24 @@ async function fetchPreview() {
     gotDone = true;
     try {
       const data = JSON.parse(event.data || '{}');
-      const aiState = data.ai_used ? '예' : '아니오';
-      const aiReason = !data.ai_used && data.ai_error ? ` | AI 실패 원인: ${data.ai_error}` : '';
-      previewMeta.textContent = `${data.subject} | ${data.badge} | AI 요약 사용: ${aiState}${aiReason}`;
-      renderCards(hotList, data.hot || []);
-      renderCards(moreList, data.bottom || []);
+      renderPreviewPayload(data);
       statusText.textContent = '완료';
     } catch (err) {
-      statusText.textContent = `오류: ${err.message}`;
-    } finally {
-      finalize();
+      fetchSnapshotFallback(err.message || 'done_parse_error');
+      return;
     }
+    finalize();
   });
 
   stream.addEventListener('failed', (event) => {
     try {
       const data = JSON.parse(event.data || '{}');
-      statusText.textContent = `오류: ${data.detail || data.message || '프리뷰 생성 실패'}`;
+      fetchSnapshotFallback(data.detail || data.message || 'stream_failed');
+      return;
     } catch (_err) {
-      statusText.textContent = '오류: 프리뷰 생성에 실패했습니다.';
+      fetchSnapshotFallback('stream_failed');
+      return;
     }
-    finalize();
   });
 
   stream.onerror = () => {
@@ -193,8 +259,7 @@ async function fetchPreview() {
       statusText.textContent = `연결 재시도 중... (${errorCount}/2)`;
       return;
     }
-    statusText.textContent = '오류: 실시간 연결이 불안정합니다. 다시 시도하세요.';
-    finalize();
+    fetchSnapshotFallback('stream_error');
   };
 }
 

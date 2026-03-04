@@ -126,6 +126,16 @@ h1 {
   gap: 10px;
 }
 
+.empty-cards {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px dashed #bae6fd;
+  border-radius: 10px;
+  background: #f8fcff;
+  color: #0369a1;
+  font-size: 0.9rem;
+}
+
 .card {
   border: 1px solid #e0f2fe;
   border-radius: 12px;

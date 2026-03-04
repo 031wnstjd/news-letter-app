@@ -76,7 +76,7 @@ def test_preview_prefers_korean_translated_title(monkeypatch):
         )
 
     monkeypatch.setattr('newsletter_api.newsletter.pipeline.AISummarizer.summarize_item', fake_summarize_item)
-    monkeypatch.setattr('newsletter_api.newsletter.pipeline.fetch_article_text', lambda _url: "")
+    monkeypatch.setattr('newsletter_api.newsletter.pipeline.fetch_article_text', lambda _url, **_kwargs: "")
 
     result = build_daily_newsletter(limit=2)
     assert result['hot'][0]['title'] == '번역된 제목'
@@ -107,7 +107,7 @@ def test_preview_uses_article_body_for_ai_input(monkeypatch):
     )
     monkeypatch.setattr(
         'newsletter_api.newsletter.pipeline.fetch_article_text',
-        lambda _url: "실제 본문 내용 첫 문장입니다. 실제 본문 내용 두 번째 문장입니다.",
+        lambda _url, **_kwargs: "실제 본문 내용 첫 문장입니다. 실제 본문 내용 두 번째 문장입니다.",
     )
 
     captured = {}
@@ -156,7 +156,7 @@ def test_preview_exposes_ai_error_when_all_ai_calls_fail(monkeypatch):
             }
         ],
     )
-    monkeypatch.setattr('newsletter_api.newsletter.pipeline.fetch_article_text', lambda _url: "")
+    monkeypatch.setattr('newsletter_api.newsletter.pipeline.fetch_article_text', lambda _url, **_kwargs: "")
 
     def fake_fail(_self, title, source_text, url):
         return SummaryResult(lines=[], ok=False, error="OPENAI_API_KEY가 설정되지 않았습니다.")
@@ -186,7 +186,7 @@ def test_preview_reports_progress_events(monkeypatch):
             }
         ],
     )
-    monkeypatch.setattr('newsletter_api.newsletter.pipeline.fetch_article_text', lambda _url: "")
+    monkeypatch.setattr('newsletter_api.newsletter.pipeline.fetch_article_text', lambda _url, **_kwargs: "")
 
     def fake_ok(_self, title, source_text, url):
         return SummaryResult(
@@ -211,4 +211,9 @@ def test_preview_reports_progress_events(monkeypatch):
     assert 'start' in stages
     assert 'collect_done' in stages
     assert 'summarizing' in stages
+    assert 'item_done' in stages
     assert 'done' in stages
+    item_events = [event for event in events if event.get('stage') == 'item_done']
+    assert item_events
+    assert item_events[0].get('item', {}).get('markdown')
+    assert item_events[0].get('item', {}).get('title')

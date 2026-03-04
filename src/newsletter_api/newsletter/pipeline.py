@@ -31,6 +31,18 @@ HEAVY_RESEARCH_DOMAINS = {
     "research.google",
     "ai.meta.com",
 }
+SOURCE_SCAN_PRIORITY = (
+    "news.hada.io",
+    "news.ycombinator.com",
+    "lobste.rs",
+    "dev.to",
+    "reddit.com",
+    "github.blog",
+    "openai.com",
+    "aws.amazon.com",
+    "kubernetes.io",
+    "developer.chrome.com",
+)
 
 ProgressCallback = Callable[[dict], None]
 
@@ -69,11 +81,38 @@ def _commercial_penalty(item: dict) -> float:
 
 def _collect_candidates(limit: int = 120) -> list[dict]:
     groups = load_sources("sources.yaml")
+    sources = [*groups.official, *groups.community]
+    sources = [source for source in sources if source.get("enabled", True) and source.get("rss_url")]
+
+    def _source_order(source: dict) -> tuple[int, str]:
+        domain = str(source.get("domain", "")).lower()
+        for idx, preferred in enumerate(SOURCE_SCAN_PRIORITY):
+            if preferred in domain:
+                return idx, domain
+        return len(SOURCE_SCAN_PRIORITY), domain
+
+    sources = sorted(sources, key=_source_order)
+    source_scan_limit = max(8, min(16, (limit // 2) + 4))
+    selected_sources = sources[:source_scan_limit]
+    per_source_limit = 4
+
+    items_by_index: dict[int, list[dict]] = {}
+    max_workers = max(1, min(8, len(selected_sources)))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_map = {
+            executor.submit(fetch_rss_items, source, per_source_limit): index
+            for index, source in enumerate(selected_sources)
+        }
+        for future in as_completed(future_map):
+            index = future_map[future]
+            try:
+                items_by_index[index] = future.result() or []
+            except Exception:  # noqa: BLE001
+                items_by_index[index] = []
+
     candidates: list[dict] = []
-    per_source_limit = 6
-    for source in [*groups.official, *groups.community]:
-        items = fetch_rss_items(source, limit=per_source_limit)
-        for item in items:
+    for index, source in enumerate(selected_sources):
+        for item in items_by_index.get(index, []):
             item["canonical_url"] = canonicalize_url(item.get("url", ""))
             item["trust_tier"] = source.get("trust_tier", "T2")
             item["category"] = item.get("category") or (source.get("tags") or ["기타"])[0]
@@ -124,7 +163,7 @@ def _rank(candidates: list[dict]) -> list[dict]:
 
 
 def _build_source_text(item: dict) -> str:
-    article_text = fetch_article_text(item.get("url", ""))
+    article_text = fetch_article_text(item.get("url", ""), timeout=4.0, max_chars=6000)
     feed_summary = (item.get("summary") or "").strip()
     title = (item.get("title") or "").strip()
 
@@ -381,6 +420,8 @@ def build_daily_newsletter(limit: int = 8, progress_callback: ProgressCallback |
                     "current": completed,
                     "total": total,
                     "title": display_title,
+                    "index": idx,
+                    "item": rendered[idx],
                 },
             )
 

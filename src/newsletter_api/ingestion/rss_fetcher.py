@@ -4,7 +4,7 @@ import feedparser
 import httpx
 
 
-def _fetch_feed_xml(rss_url: str, timeout: float = 4.0) -> str:
+def _fetch_feed_xml(rss_url: str, timeout: float = 2.5) -> str:
     response = httpx.get(
         rss_url,
         timeout=timeout,
