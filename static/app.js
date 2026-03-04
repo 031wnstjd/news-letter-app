@@ -3,10 +3,12 @@ const statusText = document.getElementById('statusText');
 const previewMeta = document.getElementById('previewMeta');
 const hotList = document.getElementById('hotList');
 const moreList = document.getElementById('moreList');
+const progressList = document.getElementById('progressList');
 
 const manualForm = document.getElementById('manualForm');
 const summaryLines = document.getElementById('summaryLines');
 let previewStream = null;
+const PREVIEW_LIMIT = 4;
 
 function escapeHtml(value) {
   return String(value || '')
@@ -118,11 +120,14 @@ async function fetchPreview() {
   }
   statusText.textContent = '프리뷰 생성 시작...';
   previewMeta.textContent = '진행률: 0%';
+  progressList.innerHTML = '';
   hotList.innerHTML = '';
   moreList.innerHTML = '';
   previewBtn.disabled = true;
-  const stream = new EventSource('/v1/newsletter/preview/stream?limit=8');
+  const stream = new EventSource(`/v1/newsletter/preview/stream?limit=${PREVIEW_LIMIT}`);
   previewStream = stream;
+  let gotDone = false;
+  let errorCount = 0;
 
   function finalize() {
     if (previewStream) {
@@ -139,12 +144,21 @@ async function fetchPreview() {
       const progressText = data.total ? `(${data.current || 0}/${data.total})` : '';
       statusText.textContent = data.message || '처리 중...';
       previewMeta.textContent = `진행률: ${percent}% ${progressText}`.trim();
+      if (data.stage === 'item_done' && data.title) {
+        const li = document.createElement('li');
+        li.textContent = `${data.current}/${data.total} 완료 - ${data.title}`;
+        progressList.prepend(li);
+        while (progressList.children.length > 6) {
+          progressList.removeChild(progressList.lastChild);
+        }
+      }
     } catch (_err) {
       statusText.textContent = '진행 상태를 업데이트하는 중입니다...';
     }
   });
 
   stream.addEventListener('done', (event) => {
+    gotDone = true;
     try {
       const data = JSON.parse(event.data || '{}');
       const aiState = data.ai_used ? '예' : '아니오';
@@ -160,19 +174,28 @@ async function fetchPreview() {
     }
   });
 
-  stream.addEventListener('error', (event) => {
-    if (event?.data) {
-      try {
-        const data = JSON.parse(event.data);
-        statusText.textContent = `오류: ${data.detail || data.message || '프리뷰 생성 실패'}`;
-      } catch (_err) {
-        statusText.textContent = '오류: 스트림 처리 중 문제가 발생했습니다.';
-      }
-    } else {
-      statusText.textContent = '오류: 연결이 끊어졌습니다. 다시 시도하세요.';
+  stream.addEventListener('failed', (event) => {
+    try {
+      const data = JSON.parse(event.data || '{}');
+      statusText.textContent = `오류: ${data.detail || data.message || '프리뷰 생성 실패'}`;
+    } catch (_err) {
+      statusText.textContent = '오류: 프리뷰 생성에 실패했습니다.';
     }
     finalize();
   });
+
+  stream.onerror = () => {
+    if (gotDone) {
+      return;
+    }
+    errorCount += 1;
+    if (errorCount < 3) {
+      statusText.textContent = `연결 재시도 중... (${errorCount}/2)`;
+      return;
+    }
+    statusText.textContent = '오류: 실시간 연결이 불안정합니다. 다시 시도하세요.';
+    finalize();
+  };
 }
 
 previewBtn.addEventListener('click', fetchPreview);

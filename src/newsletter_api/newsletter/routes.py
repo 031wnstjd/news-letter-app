@@ -27,7 +27,7 @@ def preview_stream(limit: int = 8) -> StreamingResponse:
             result = build_daily_newsletter(limit=limit, progress_callback=event_queue.put)
             event_queue.put({"event": "done", "payload": result})
         except Exception as exc:  # noqa: BLE001
-            event_queue.put({"event": "error", "payload": {"message": "프리뷰 생성 실패", "detail": str(exc)}})
+            event_queue.put({"event": "failed", "payload": {"message": "프리뷰 생성 실패", "detail": str(exc)}})
         finally:
             event_queue.put(sentinel)
 
@@ -42,7 +42,7 @@ def preview_stream(limit: int = 8) -> StreamingResponse:
                 break
             if not isinstance(item, dict):
                 continue
-            if item.get("event") in {"done", "error"}:
+            if item.get("event") in {"done", "failed"}:
                 event_name = item["event"]
                 payload = item["payload"]
             else:

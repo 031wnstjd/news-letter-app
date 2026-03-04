@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from typing import Callable
@@ -333,41 +334,63 @@ def build_daily_newsletter(limit: int = 8, progress_callback: ProgressCallback |
     summarizer = AISummarizer()
     ai_used = False
     ai_errors: list[str] = []
-    rendered = []
+    rendered: list[dict | None] = [None] * len(picked)
     total = len(picked)
+
+    def _summarize_job(job_item: dict) -> tuple[list[str], bool, str, str]:
+        local_summarizer = AISummarizer(
+            api_key=summarizer.api_key,
+            model=summarizer.model,
+            base_url=summarizer.base_url,
+            timeout=summarizer.timeout,
+        )
+        return _summarize_item(job_item, local_summarizer)
+
     for index, item in enumerate(picked, start=1):
         _emit_progress(
             progress_callback,
             {
                 "stage": "summarizing",
-                "message": f"{index}/{total} 기사 요약 중: {item.get('title', '')[:60]}",
-                "percent": 20 + int((index - 1) / max(total, 1) * 70),
-                "current": index - 1,
-                "total": total,
-            },
-        )
-        lines, used_ai, translated_title, ai_error = _summarize_item(item, summarizer)
-        ai_used = ai_used or used_ai
-        if ai_error:
-            ai_errors.append(ai_error)
-        display_title = translated_title or item.get("title", "")
-        rendered.append(_to_view(item, lines, display_title))
-        _emit_progress(
-            progress_callback,
-            {
-                "stage": "item_done",
-                "message": f"{index}/{total} 기사 완료",
-                "percent": 20 + int(index / max(total, 1) * 70),
-                "current": index,
+                "message": f"{index}/{total} 기사 요약 작업 등록: {item.get('title', '')[:60]}",
+                "percent": 20,
+                "current": 0,
                 "total": total,
             },
         )
 
-    hot = rendered[:2]
-    bottom = rendered[2:]
+    max_workers = max(1, min(4, total))
+    completed = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_map = {executor.submit(_summarize_job, item): idx for idx, item in enumerate(picked)}
+        for future in as_completed(future_map):
+            idx = future_map[future]
+            item = picked[idx]
+            lines, used_ai, translated_title, ai_error = future.result()
+            ai_used = ai_used or used_ai
+            if ai_error:
+                ai_errors.append(ai_error)
+            display_title = translated_title or item.get("title", "")
+            rendered[idx] = _to_view(item, lines, display_title)
+            completed += 1
+            _emit_progress(
+                progress_callback,
+                {
+                    "stage": "item_done",
+                    "message": f"{completed}/{total} 기사 완료",
+                    "percent": 20 + int(completed / max(total, 1) * 70),
+                    "current": completed,
+                    "total": total,
+                    "title": display_title,
+                },
+            )
+
+    ordered_rendered = [item for item in rendered if item is not None]
+
+    hot = ordered_rendered[:2]
+    bottom = ordered_rendered[2:]
     result = {
-        "subject": f"[AI 개발 데일리] {datetime.now().date()} - 오늘의 핵심 {len(rendered)}개",
-        "badge": f"오늘은 검증 통과 {len(rendered)}개 발행",
+        "subject": f"[AI 개발 데일리] {datetime.now().date()} - 오늘의 핵심 {len(ordered_rendered)}개",
+        "badge": f"오늘은 검증 통과 {len(ordered_rendered)}개 발행",
         "hot": hot,
         "bottom": bottom,
         "ai_used": ai_used,
@@ -379,8 +402,8 @@ def build_daily_newsletter(limit: int = 8, progress_callback: ProgressCallback |
             "stage": "done",
             "message": "프리뷰 생성이 완료되었습니다.",
             "percent": 100,
-            "current": len(rendered),
-            "total": len(rendered),
+            "current": len(ordered_rendered),
+            "total": len(ordered_rendered),
             "ai_used": ai_used,
         },
     )

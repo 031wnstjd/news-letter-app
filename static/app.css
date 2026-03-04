@@ -103,6 +103,18 @@ h1 {
   margin-bottom: 12px;
 }
 
+.progress-list {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  color: #0f172a;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.progress-list li {
+  margin: 3px 0;
+}
+
 .columns {
   display: grid;
   grid-template-columns: 1fr;
