@@ -8,7 +8,7 @@ const progressList = document.getElementById('progressList');
 const manualForm = document.getElementById('manualForm');
 const summaryLines = document.getElementById('summaryLines');
 let previewStream = null;
-const PREVIEW_LIMIT = 4;
+const PREVIEW_LIMIT = 8;
 
 function escapeHtml(value) {
   return String(value || '')

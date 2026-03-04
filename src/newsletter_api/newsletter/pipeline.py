@@ -254,44 +254,46 @@ def _to_view(item: dict, lines: list[str], display_title: str) -> dict:
     caveats = list(sections["caveats"])
     source_notes = list(sections["source_notes"])
 
-    markdown_lines = ["### 🧭 먼저 결론"]
-    if lead:
-        markdown_lines.append(f"> {lead}")
-    else:
-        markdown_lines.append("> 이번 이슈의 핵심 흐름을 먼저 확인하세요.")
+    lead_text = lead or "이번 이슈의 핵심 흐름을 먼저 확인하세요."
+    what_points = what_happened or ["본문에서 확인된 변경 사항을 요약하지 못했습니다."]
+    fact_points = key_facts or ["핵심 사실을 충분히 추출하지 못했습니다."]
+    why_points = why or ["팀 우선순위와 운영 안정성 관점에서 추가 검토가 필요합니다."]
+    practical_points = practical or ["원문 근거를 재확인한 뒤 적용 범위와 롤백 전략을 먼저 정의하세요."]
+    caveat_points = caveats or ["운영 환경 반영 전 영향 범위와 장애 대응 시나리오를 점검하세요."]
 
-    markdown_lines.extend(["", "### 1) 이번 이슈에서 실제로 나온 것"])
-    if what_happened:
-        markdown_lines.extend(f"- {point}" for point in what_happened)
+    insight_points: list[str] = []
+    insight_points.append(f"핵심 해석: {why_points[0]}")
+    insight_points.append(f"실제 변화 포인트: {what_points[0]}")
+    if len(fact_points) > 1:
+        insight_points.append(f"추가 신호: {fact_points[1]}")
     else:
-        markdown_lines.append("- 본문에서 확인된 변경 사항을 요약하지 못했습니다.")
+        insight_points.append(f"검증 포인트: {fact_points[0]}")
 
-    markdown_lines.extend(["", "### 2) 기사에서 확인된 핵심 사실"])
-    if key_facts:
-        markdown_lines.extend(f"- {point}" for point in key_facts)
-    else:
-        markdown_lines.append("- 핵심 사실을 충분히 추출하지 못했습니다.")
+    explanation_lines = [
+        f"이번 업데이트의 중심은 **{lead_text}** 입니다.",
+        f"기사에서 직접 확인되는 변화는 **{what_points[0]}** 이고,",
+        f"실무적으로 중요한 이유는 **{why_points[0]}** 에 있습니다.",
+    ]
 
-    markdown_lines.extend(["", "### 3) 왜 중요한가"])
-    if why:
-        markdown_lines.extend(f"- {point}" for point in why)
-    else:
-        markdown_lines.append("- 팀 우선순위와 운영 안정성 관점에서 추가 검토가 필요합니다.")
+    markdown_lines = ["### 한눈에 보기", f"> {lead_text}"]
+    markdown_lines.extend(["", "### 왜 중요한가 (해설)", " ".join(explanation_lines)])
+    markdown_lines.extend(["", "### 이번에 실제로 나온 변화"])
+    markdown_lines.extend(f"- {point}" for point in what_points)
 
-    markdown_lines.extend(["", "### 4) 실무 적용 가이드"])
-    if practical:
-        markdown_lines.extend(f"{idx}. {step}" for idx, step in enumerate(practical, start=1))
-    else:
-        markdown_lines.append("1. 원문 근거를 재확인한 뒤 적용 범위와 롤백 전략을 먼저 정의하세요.")
+    markdown_lines.extend(["", "### 기사에서 확인된 사실"])
+    markdown_lines.extend(f"- {point}" for point in fact_points)
 
-    markdown_lines.extend(["", "### 5) 주의할 점"])
-    if caveats:
-        markdown_lines.extend(f"- {risk}" for risk in caveats)
-    else:
-        markdown_lines.append("- 운영 환경 반영 전 영향 범위와 장애 대응 시나리오를 점검하세요.")
+    markdown_lines.extend(["", "### 인사이트"])
+    markdown_lines.extend(f"{idx}. {point}" for idx, point in enumerate(insight_points, start=1))
+
+    markdown_lines.extend(["", "### 실무 적용 시나리오"])
+    markdown_lines.extend(f"{idx}. {step}" for idx, step in enumerate(practical_points, start=1))
+
+    markdown_lines.extend(["", "### 체크할 리스크"])
+    markdown_lines.extend(f"- {risk}" for risk in caveat_points)
 
     if source_notes:
-        markdown_lines.extend(["", "### 6) 출처 메모"])
+        markdown_lines.extend(["", "### 출처 메모"])
         markdown_lines.extend(f"- {note}" for note in source_notes)
     markdown_lines.extend(
         [

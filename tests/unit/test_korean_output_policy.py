@@ -96,10 +96,10 @@ def test_preview_prefers_korean_translated_title(monkeypatch):
     result = build_daily_newsletter(limit=2)
     assert result['hot'][0]['title'] == '번역된 제목'
     assert result['subject'].startswith('[AI 개발 데일리]')
-    assert "### 🧭 먼저 결론" in result['hot'][0]['markdown']
-    assert "### 2) 기사에서 확인된 핵심 사실" in result['hot'][0]['markdown']
-    assert "### 4) 실무 적용 가이드" in result['hot'][0]['markdown']
-    assert "### 5) 주의할 점" in result['hot'][0]['markdown']
+    assert "### 한눈에 보기" in result['hot'][0]['markdown']
+    assert "### 왜 중요한가 (해설)" in result['hot'][0]['markdown']
+    assert "### 실무 적용 시나리오" in result['hot'][0]['markdown']
+    assert "### 인사이트" in result['hot'][0]['markdown']
 
 
 def test_preview_uses_article_body_for_ai_input(monkeypatch):
@@ -149,7 +149,7 @@ def test_preview_uses_article_body_for_ai_input(monkeypatch):
     assert "실제 본문 내용" in captured['source_text']
     assert "RSS 요약 텍스트" in captured['source_text']
     assert len(result['hot'][0]['lines']) >= 7
-    assert "### 6) 출처 메모" in result['hot'][0]['markdown']
+    assert "### 출처 메모" in result['hot'][0]['markdown']
     assert "### 원문 링크" in result['hot'][0]['markdown']
 
 
