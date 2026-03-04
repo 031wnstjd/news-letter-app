@@ -24,28 +24,73 @@ function safeUrl(value) {
   return '#';
 }
 
+function formatInlineMarkdown(value) {
+  let formatted = escapeHtml(value);
+  formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  formatted = formatted.replace(/`(.+?)`/g, '<code>$1</code>');
+  return formatted;
+}
+
+function renderMarkdownToHtml(markdown) {
+  const lines = String(markdown || '').split('\n');
+  const chunks = [];
+  let listMode = null;
+
+  function closeList() {
+    if (listMode === 'ul') chunks.push('</ul>');
+    if (listMode === 'ol') chunks.push('</ol>');
+    listMode = null;
+  }
+
+  lines.forEach((rawLine) => {
+    const line = rawLine.trim();
+    if (!line) {
+      closeList();
+      return;
+    }
+
+    if (line.startsWith('### ')) {
+      closeList();
+      chunks.push(`<h4>${formatInlineMarkdown(line.slice(4))}</h4>`);
+      return;
+    }
+
+    if (line.startsWith('- ')) {
+      if (listMode !== 'ul') {
+        closeList();
+        chunks.push('<ul>');
+        listMode = 'ul';
+      }
+      chunks.push(`<li>${formatInlineMarkdown(line.slice(2))}</li>`);
+      return;
+    }
+
+    const orderedMatch = line.match(/^(\d+)\.\s+(.+)$/);
+    if (orderedMatch) {
+      if (listMode !== 'ol') {
+        closeList();
+        chunks.push('<ol>');
+        listMode = 'ol';
+      }
+      chunks.push(`<li>${formatInlineMarkdown(orderedMatch[2])}</li>`);
+      return;
+    }
+
+    closeList();
+    chunks.push(`<p>${formatInlineMarkdown(line)}</p>`);
+  });
+
+  closeList();
+  return chunks.join('');
+}
+
 function renderCards(container, items) {
   container.innerHTML = '';
   items.forEach((item) => {
-    const lines = Array.isArray(item.lines) ? item.lines : [];
-    const headline = [lines[0], lines[1]].filter(Boolean).join(' ');
-    const why = lines[2] || '';
-    const apply = lines[3] || '';
-    const extraPoints = lines.slice(4);
-
     const card = document.createElement('article');
     card.className = 'card';
     const articleUrl = safeUrl(item.url);
-    const extraHtml = extraPoints.length
-      ? `
-        <div class="card-block">
-          <strong>세부 포인트</strong>
-          <ul class="card-point-list">
-            ${extraPoints.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}
-          </ul>
-        </div>
-      `
-      : '';
+    const markdownHtml = renderMarkdownToHtml(item.markdown || '');
 
     card.innerHTML = `
       <a href="${escapeHtml(articleUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a>
@@ -53,19 +98,7 @@ function renderCards(container, items) {
         <small>출처: ${escapeHtml(item.source_domain || '알 수 없음')}</small>
         <small>카테고리: ${escapeHtml(item.category || '기타')}</small>
       </div>
-      <div class="card-block">
-        <strong>핵심 정리</strong>
-        <p>${escapeHtml(headline || item.tldr || '')}</p>
-      </div>
-      <div class="card-block">
-        <strong>왜 중요한가</strong>
-        <p>${escapeHtml(why)}</p>
-      </div>
-      <div class="card-block">
-        <strong>실무 적용</strong>
-        <p>${escapeHtml(apply)}</p>
-      </div>
-      ${extraHtml}
+      <div class="md-view">${markdownHtml}</div>
     `;
     container.appendChild(card);
   });

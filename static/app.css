@@ -149,30 +149,47 @@ h1 {
   color: #0369a1;
 }
 
-.card-block {
+.md-view {
   margin-top: 10px;
+  border: 1px solid #e0f2fe;
+  border-radius: 10px;
+  background: #f8fcff;
+  padding: 10px 12px;
 }
 
-.card-block strong {
-  display: block;
-  font-size: 0.85rem;
-  letter-spacing: 0.02em;
+.md-view h4 {
+  margin: 10px 0 6px;
+  font-size: 0.93rem;
   color: #075985;
 }
 
-.card-block p {
-  margin: 4px 0 0;
+.md-view h4:first-child {
+  margin-top: 0;
+}
+
+.md-view p {
+  margin: 6px 0;
   line-height: 1.55;
 }
 
-.card-point-list {
-  margin: 4px 0 0;
+.md-view ul,
+.md-view ol {
+  margin: 6px 0 8px;
   padding-left: 18px;
 }
 
-.card-point-list li {
-  margin: 3px 0;
-  line-height: 1.45;
+.md-view li {
+  margin: 4px 0;
+  line-height: 1.5;
+}
+
+.md-view code {
+  background: #e0f2fe;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  padding: 1px 6px;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.82rem;
 }
 
 .form {

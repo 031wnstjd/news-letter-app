@@ -92,6 +92,14 @@ sources:
       enabled: true
 
   community:
+    - name: "GeekNews"
+      domain: "news.hada.io"
+      trust_tier: "T2"
+      fetch_type: ["rss", "html"]
+      rss_url: "https://news.hada.io/rss/news"
+      lang: ["ko"]
+      tags: ["community", "korean-tech"]
+      enabled: true
     - name: "Hacker News"
       domain: "news.ycombinator.com"
       trust_tier: "T2"

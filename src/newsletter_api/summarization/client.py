@@ -43,7 +43,8 @@ class AISummarizer:
             "반드시 JSON 객체로만 응답하세요. 키는 정확히 다음 5개만 사용하세요: "
             "translated_title(string), tldr(array[string] 길이 2), why_it_matters(string), "
             "practical_apply(string), key_points(array[string] 길이 2~3). "
-            "모든 값은 한국어로 작성하세요.\\n"
+            "모든 값은 한국어로 작성하고 영어 문장을 그대로 복사하지 말고 한국어로 의역하세요. "
+            "문체는 논문 초록처럼 무겁지 않게, GeekNews 요약처럼 간결하고 실무 중심으로 작성하세요.\\n"
             f"원문 제목: {title}\\n원문 URL: {url}\\n원문 내용:\\n{source_text[:5000]}"
         )
         payload = {
@@ -54,7 +55,8 @@ class AISummarizer:
                     "role": "system",
                     "content": (
                         "당신은 기술 뉴스레터 에디터입니다. "
-                        "반드시 한국어로만 작성하고 과장 없이 사실 중심으로 요약하세요."
+                        "반드시 한국어로만 작성하고 과장 없이 사실 중심으로 요약하세요. "
+                        "학술 논문체 대신 개발자 커뮤니티 브리핑 스타일로 작성하세요."
                     ),
                 },
                 {"role": "user", "content": prompt},
@@ -104,6 +106,25 @@ class AISummarizer:
 _WS_RE = re.compile(r"\s+")
 _SENTENCE_RE = re.compile(r"(?<=[.!?。！？])\s+")
 _SECTION_HEADER_RE = re.compile(r"\[[^\]]+\]")
+_HANGUL_RE = re.compile(r"[가-힣]")
+_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9+._/-]{2,}|[가-힣]{2,}")
+_EN_STOPWORDS = {
+    "the",
+    "and",
+    "that",
+    "with",
+    "from",
+    "this",
+    "have",
+    "will",
+    "into",
+    "about",
+    "after",
+    "before",
+    "under",
+    "using",
+    "new",
+}
 
 
 def _truncate(value: str, limit: int = 170) -> str:
@@ -131,13 +152,39 @@ def _pick_sentences(text: str) -> list[str]:
     return [c for c in chunked if c]
 
 
+def _extract_keywords(text: str, limit: int = 4) -> list[str]:
+    tokens = _TOKEN_RE.findall(text)
+    selected: list[str] = []
+    for token in tokens:
+        cleaned = token.strip(".,:;()[]{}\"'")
+        if not cleaned:
+            continue
+        if cleaned.lower() in _EN_STOPWORDS:
+            continue
+        if len(cleaned) < 2:
+            continue
+        if cleaned in selected:
+            continue
+        selected.append(cleaned)
+        if len(selected) >= limit:
+            break
+    return selected
+
+
 def summarize_text(text: str) -> SummaryResult:
     if not text.strip():
         return SummaryResult(lines=[], ok=False, error="요약할 본문이 비어 있습니다.")
-    sentences = _pick_sentences(text)
-    first = _truncate(sentences[0]) if len(sentences) > 0 else "원문에서 핵심 내용을 추출했습니다."
-    second = _truncate(sentences[1]) if len(sentences) > 1 else _truncate(first)
-    third = _truncate(sentences[2]) if len(sentences) > 2 else "세부 맥락은 원문 링크에서 함께 확인하는 것이 좋습니다."
+    if _HANGUL_RE.search(text):
+        sentences = _pick_sentences(text)
+        first = _truncate(sentences[0]) if len(sentences) > 0 else "원문에서 핵심 내용을 추출했습니다."
+        second = _truncate(sentences[1]) if len(sentences) > 1 else _truncate(first)
+        third = _truncate(sentences[2]) if len(sentences) > 2 else "세부 맥락은 원문 링크에서 함께 확인하는 것이 좋습니다."
+    else:
+        keywords = _extract_keywords(text)
+        topic = ", ".join(keywords[:3]) if keywords else "핵심 기술 이슈"
+        first = f"{topic} 관련 주요 업데이트가 공개되었습니다."
+        second = "변경된 기능과 영향 범위를 중심으로 핵심 포인트를 정리했습니다."
+        third = "기술 선택과 우선순위에 영향을 줄 수 있으므로 팀 단위 검토가 필요합니다."
 
     lines = [
         f"핵심 요약 1: {first}",

@@ -13,6 +13,23 @@ from newsletter_api.ranking.scorer import score
 from newsletter_api.sources_loader import load_sources
 from newsletter_api.summarization.client import AISummarizer, summarize_text
 
+COMMUNITY_PREFERRED_DOMAINS = {
+    "news.hada.io",
+    "news.ycombinator.com",
+    "lobste.rs",
+    "reddit.com",
+    "techmeme.com",
+    "dev.to",
+    "slashdot.org",
+    "daily.dev",
+    "yozm.wishket.com",
+}
+HEAVY_RESEARCH_DOMAINS = {
+    "arxiv.org",
+    "research.google",
+    "ai.meta.com",
+}
+
 
 def _parse_age_hours(published: str | None) -> int:
     if not published:
@@ -90,7 +107,14 @@ def _rank(candidates: list[dict]) -> list[dict]:
         authority = _authority_by_tier(item.get("trust_tier", "T2"))
         impact = _impact_score(item)
         penalty = _commercial_penalty(item)
-        item["score"] = score(recency, authority, impact, penalty)
+        domain = (item.get("source_domain") or "").lower()
+        source_adjust = 0.0
+        if any(preferred in domain for preferred in COMMUNITY_PREFERRED_DOMAINS):
+            source_adjust += 0.12
+        if any(heavy in domain for heavy in HEAVY_RESEARCH_DOMAINS):
+            source_adjust -= 0.18
+        raw_score = score(recency, authority, impact, penalty) + source_adjust
+        item["score"] = max(0.0, min(raw_score, 1.0))
     return sorted(candidates, key=lambda x: x.get("score", 0.0), reverse=True)
 
 
@@ -120,6 +144,32 @@ def _summarize_item(item: dict, summarizer: AISummarizer) -> tuple[list[str], bo
 
 def _to_view(item: dict, lines: list[str], display_title: str) -> dict:
     tldr = " ".join(lines[:2]).strip() if lines else ""
+    summary_points = [line for line in lines[:2] if line]
+    why_it_matters = lines[2] if len(lines) > 2 else ""
+    practical_apply = lines[3] if len(lines) > 3 else ""
+    detail_points = lines[4:] if len(lines) > 4 else []
+
+    markdown_lines = ["### 핵심 요약"]
+    if summary_points:
+        markdown_lines.extend(f"- {point}" for point in summary_points)
+    else:
+        markdown_lines.append("- 핵심 요약을 생성하지 못했습니다.")
+    markdown_lines.extend(["", "### 왜 중요한가", why_it_matters or "현재 이슈의 영향 범위를 추가 검토해야 합니다.", ""])
+    markdown_lines.append("### 실무 적용")
+    apply_steps = [step for step in [practical_apply, *detail_points] if step and step.strip()]
+    if apply_steps:
+        markdown_lines.extend(f"{idx}. {step}" for idx, step in enumerate(apply_steps, start=1))
+    else:
+        markdown_lines.append("1. 원문 근거를 다시 확인한 뒤 적용 여부를 판단하세요.")
+    markdown_lines.extend(
+        [
+            "",
+            "### 참고",
+            f"- 출처: {item.get('source_domain', '') or '알 수 없음'}",
+            f"- 링크: {item.get('url', '')}",
+        ]
+    )
+
     return {
         "title": display_title,
         "url": item.get("url", ""),
@@ -128,6 +178,7 @@ def _to_view(item: dict, lines: list[str], display_title: str) -> dict:
         "score": round(item.get("score", 0.0), 3),
         "tldr": tldr,
         "lines": lines,
+        "markdown": "\n".join(markdown_lines).strip(),
     }
 
 
