@@ -14,7 +14,7 @@ function renderCards(container, items) {
     card.className = 'card';
     card.innerHTML = `
       <a href="${item.url}" target="_blank" rel="noopener noreferrer">${item.title}</a>
-      <div><small>source: ${item.source_domain || 'unknown'}</small></div>
+      <div><small>출처: ${item.source_domain || '알 수 없음'}</small></div>
       <p>${item.tldr || ''}</p>
     `;
     container.appendChild(card);
@@ -28,10 +28,10 @@ async function fetchPreview() {
     const res = await fetch('/v1/newsletter/preview');
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data.detail || 'preview failed');
+      throw new Error(data.detail || '프리뷰 생성에 실패했습니다');
     }
 
-    previewMeta.textContent = `${data.subject} | ${data.badge} | AI used: ${data.ai_used}`;
+    previewMeta.textContent = `${data.subject} | ${data.badge} | AI 요약 사용: ${data.ai_used ? '예' : '아니오'}`;
     renderCards(hotList, data.hot || []);
     renderCards(moreList, data.bottom || []);
     statusText.textContent = '완료';

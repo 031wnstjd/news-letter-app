@@ -3,7 +3,7 @@ from newsletter_api.campaign.composer import compose_campaign
 
 def sample_issue_set() -> dict:
     return {
-        "subject": "[AI/Dev Daily] test",
+        "subject": "[AI 개발 데일리] 테스트",
         "badge": "오늘은 검증 통과 8개 발행",
         "hot": [
             {
@@ -31,4 +31,4 @@ def sample_issue_set() -> dict:
 def test_compose_campaign_returns_html_and_text():
     result = compose_campaign(sample_issue_set())
     assert "<html" in result.html.lower()
-    assert "Hot Issue" in result.text
+    assert "핵심 이슈" in result.text

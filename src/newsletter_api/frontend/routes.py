@@ -16,7 +16,7 @@ def index(request: Request) -> HTMLResponse:
         request,
         'web/index.html.j2',
         {
-            'app_name': 'AI Dev Daily',
+            'app_name': 'AI 개발 데일리',
             'subtitle': '실제로 동작하는 AI 뉴스레터 요약 워크벤치',
         },
     )

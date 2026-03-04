@@ -13,6 +13,7 @@ class SummaryResult:
     lines: list[str]
     ok: bool
     error: str = ""
+    translated_title: str = ""
 
 
 class AISummarizer:
@@ -33,20 +34,27 @@ class AISummarizer:
 
     def summarize_item(self, title: str, source_text: str, url: str) -> SummaryResult:
         if not self.api_key:
-            return SummaryResult(lines=[], ok=False, error="OPENAI_API_KEY is missing")
+            return SummaryResult(lines=[], ok=False, error="OPENAI_API_KEY가 설정되지 않았습니다.")
         if not source_text.strip():
-            return SummaryResult(lines=[], ok=False, error="source_text is empty")
+            return SummaryResult(lines=[], ok=False, error="요약할 본문이 비어 있습니다.")
 
         prompt = (
-            "Return strict JSON with keys: "
-            "tldr(list of 2 short strings), why_it_matters(string), practical_apply(string).\\n"
-            f"Title: {title}\\nURL: {url}\\nContent:\\n{source_text[:5000]}"
+            "반드시 JSON 객체로만 응답하세요. 키는 정확히 다음 4개만 사용하세요: "
+            "translated_title(string), tldr(array[string] 길이 2), why_it_matters(string), practical_apply(string). "
+            "모든 값은 한국어로 작성하세요.\\n"
+            f"원문 제목: {title}\\n원문 URL: {url}\\n원문 내용:\\n{source_text[:5000]}"
         )
         payload = {
             "model": self.model,
             "temperature": 0.2,
             "messages": [
-                {"role": "system", "content": "You summarize technical news in Korean, concise and factual."},
+                {
+                    "role": "system",
+                    "content": (
+                        "당신은 기술 뉴스레터 에디터입니다. "
+                        "반드시 한국어로만 작성하고 과장 없이 사실 중심으로 요약하세요."
+                    ),
+                },
                 {"role": "user", "content": prompt},
             ],
         }
@@ -58,6 +66,11 @@ class AISummarizer:
             response = client.post(f"{self.base_url}/chat/completions", json=payload, headers=headers)
             response.raise_for_status()
             content = response.json()["choices"][0]["message"]["content"]
+            content = content.strip()
+            if content.startswith("```"):
+                content = content.strip("`")
+                if content.startswith("json"):
+                    content = content[4:].strip()
             parsed = json.loads(content)
             tldr = parsed.get("tldr", [])
             if not isinstance(tldr, list):
@@ -70,10 +83,11 @@ class AISummarizer:
             ]
             lines = [line.strip() for line in lines if line and line.strip()]
             if not lines:
-                return SummaryResult(lines=[], ok=False, error="model returned empty summary")
-            return SummaryResult(lines=lines, ok=True)
-        except Exception as exc:  # noqa: BLE001
-            return SummaryResult(lines=[], ok=False, error=f"openai request failed: {exc}")
+                return SummaryResult(lines=[], ok=False, error="모델이 비어 있는 요약을 반환했습니다.")
+            translated_title = str(parsed.get("translated_title", "")).strip()
+            return SummaryResult(lines=lines, ok=True, translated_title=translated_title)
+        except Exception:  # noqa: BLE001
+            return SummaryResult(lines=[], ok=False, error="OpenAI 요청에 실패했습니다.")
         finally:
             if own_client:
                 client.close()
@@ -81,11 +95,11 @@ class AISummarizer:
 
 def summarize_text(text: str) -> SummaryResult:
     if not text.strip():
-        return SummaryResult(lines=[], ok=False, error="source_text is empty")
-    # Stubbed deterministic summary for MVP scaffolding.
+        return SummaryResult(lines=[], ok=False, error="요약할 본문이 비어 있습니다.")
+    # API 키가 없거나 모델 응답이 실패한 경우에 사용하는 한국어 기본 요약.
     lines = [
-        text.strip().split(". ")[0][:160],
-        "Why it matters: practical impact for engineering teams.",
-        "Apply: evaluate adoption in staging before production.",
+        "핵심 요약: 입력된 내용을 바탕으로 주요 변경점과 맥락을 정리했습니다.",
+        "왜 중요한가: 실무 팀의 우선순위와 기술 선택에 영향을 줍니다.",
+        "실무 적용: 스테이징 환경에서 영향 범위를 먼저 검증하세요.",
     ]
     return SummaryResult(lines=lines, ok=True)

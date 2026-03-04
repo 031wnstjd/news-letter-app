@@ -18,7 +18,7 @@ def fetch_rss_items(_source: dict, limit: int = 20) -> list[dict]:
                 "published": getattr(entry, "published", ""),
                 "source_name": _source.get("name", ""),
                 "source_domain": _source.get("domain", ""),
-                "category": (_source.get("tags") or ["Tooling"])[0],
+                "category": (_source.get("tags") or ["기타"])[0],
             }
         )
     return items

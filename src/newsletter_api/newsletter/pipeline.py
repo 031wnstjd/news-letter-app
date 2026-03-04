@@ -53,7 +53,7 @@ def _collect_candidates(limit: int = 120) -> list[dict]:
         for item in items:
             item["canonical_url"] = canonicalize_url(item.get("url", ""))
             item["trust_tier"] = source.get("trust_tier", "T2")
-            item["category"] = item.get("category") or (source.get("tags") or ["Tooling"])[0]
+            item["category"] = item.get("category") or (source.get("tags") or ["기타"])[0]
             item["age_hours"] = _parse_age_hours(item.get("published"))
             item["source_domain"] = item.get("source_domain") or source.get("domain", "")
             candidates.append(item)
@@ -93,22 +93,22 @@ def _rank(candidates: list[dict]) -> list[dict]:
     return sorted(candidates, key=lambda x: x.get("score", 0.0), reverse=True)
 
 
-def _summarize_item(item: dict, summarizer: AISummarizer) -> tuple[list[str], bool]:
+def _summarize_item(item: dict, summarizer: AISummarizer) -> tuple[list[str], bool, str]:
     text = item.get("summary") or item.get("title") or ""
     ai_result = summarizer.summarize_item(item.get("title", ""), text, item.get("url", ""))
     if ai_result.ok:
-        return ai_result.lines, True
+        return ai_result.lines, True, ai_result.translated_title
     fallback = summarize_text(text)
-    return fallback.lines, False
+    return fallback.lines, False, ""
 
 
-def _to_view(item: dict, lines: list[str]) -> dict:
+def _to_view(item: dict, lines: list[str], display_title: str) -> dict:
     tldr = " ".join(lines[:2]).strip() if lines else ""
     return {
-        "title": item.get("title", ""),
+        "title": display_title,
         "url": item.get("url", ""),
         "source_domain": item.get("source_domain", ""),
-        "category": item.get("category", "Tooling"),
+        "category": item.get("category", "기타"),
         "score": round(item.get("score", 0.0), 3),
         "tldr": tldr,
         "lines": lines,
@@ -119,7 +119,7 @@ def build_daily_newsletter(limit: int = 8) -> dict:
     candidates = _rank(_dedup(_collect_candidates()))
     if not candidates:
         return {
-            "subject": f"[AI/Dev Daily] {datetime.now().date()} - No items",
+            "subject": f"[AI 개발 데일리] {datetime.now().date()} - 발행할 항목 없음",
             "badge": "오늘은 수집된 아이템이 없습니다",
             "hot": [],
             "bottom": [],
@@ -134,14 +134,15 @@ def build_daily_newsletter(limit: int = 8) -> dict:
     ai_used = False
     rendered = []
     for item in picked:
-        lines, used_ai = _summarize_item(item, summarizer)
+        lines, used_ai, translated_title = _summarize_item(item, summarizer)
         ai_used = ai_used or used_ai
-        rendered.append(_to_view(item, lines))
+        display_title = translated_title or item.get("title", "")
+        rendered.append(_to_view(item, lines, display_title))
 
     hot = rendered[:2]
     bottom = rendered[2:]
     return {
-        "subject": f"[AI/Dev Daily] {datetime.now().date()} - 오늘의 핵심 {len(rendered)}개",
+        "subject": f"[AI 개발 데일리] {datetime.now().date()} - 오늘의 핵심 {len(rendered)}개",
         "badge": f"오늘은 검증 통과 {len(rendered)}개 발행",
         "hot": hot,
         "bottom": bottom,

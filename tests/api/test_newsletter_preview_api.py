@@ -6,7 +6,7 @@ from newsletter_api.main import app
 def test_newsletter_preview_endpoint_returns_slots(monkeypatch):
     def fake_build_daily_newsletter(limit: int = 8):
         return {
-            'subject': '[AI/Dev Daily] Preview',
+            'subject': '[AI 개발 데일리] 프리뷰',
             'badge': '오늘은 검증 통과 8개 발행',
             'hot': [{'title': 'h1'}, {'title': 'h2'}],
             'bottom': [{'title': 'b1'} for _ in range(6)],
@@ -20,6 +20,6 @@ def test_newsletter_preview_endpoint_returns_slots(monkeypatch):
 
     assert response.status_code == 200
     body = response.json()
-    assert body['subject'] == '[AI/Dev Daily] Preview'
+    assert body['subject'] == '[AI 개발 데일리] 프리뷰'
     assert len(body['hot']) == 2
     assert len(body['bottom']) == 6

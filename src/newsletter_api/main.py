@@ -9,7 +9,7 @@ from newsletter_api.newsletter.routes import router as newsletter_router
 from newsletter_api.subscribers.routes import router as subscriber_router
 from newsletter_api.summarization.routes import router as summarization_router
 
-app = FastAPI(title="AI/Dev Daily Newsletter")
+app = FastAPI(title="AI 개발 데일리 뉴스레터")
 app.include_router(subscriber_router)
 app.include_router(redirect_router)
 app.include_router(newsletter_router)
