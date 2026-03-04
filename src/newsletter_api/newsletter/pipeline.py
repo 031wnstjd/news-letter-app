@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
+from typing import Callable
 from urllib.parse import urlparse
 
 from newsletter_api.dedup.service import should_merge_by_mixed_rule
@@ -29,6 +30,8 @@ HEAVY_RESEARCH_DOMAINS = {
     "research.google",
     "ai.meta.com",
 }
+
+ProgressCallback = Callable[[dict], None]
 
 
 def _parse_age_hours(published: str | None) -> int:
@@ -272,10 +275,49 @@ def _to_view(item: dict, lines: list[str], display_title: str) -> dict:
     }
 
 
-def build_daily_newsletter(limit: int = 8) -> dict:
+def _emit_progress(callback: ProgressCallback | None, payload: dict) -> None:
+    if not callback:
+        return
+    try:
+        callback(payload)
+    except Exception:  # noqa: BLE001
+        return
+
+
+def build_daily_newsletter(limit: int = 8, progress_callback: ProgressCallback | None = None) -> dict:
+    _emit_progress(
+        progress_callback,
+        {
+            "stage": "start",
+            "message": "뉴스 소스를 수집하는 중입니다...",
+            "percent": 5,
+            "current": 0,
+            "total": limit,
+        },
+    )
     candidate_limit = max(32, limit * 6)
     candidates = _rank(_dedup(_collect_candidates(limit=candidate_limit)))
+    _emit_progress(
+        progress_callback,
+        {
+            "stage": "collect_done",
+            "message": f"후보 {len(candidates)}건을 정리했습니다.",
+            "percent": 20,
+            "current": 0,
+            "total": limit,
+        },
+    )
     if not candidates:
+        _emit_progress(
+            progress_callback,
+            {
+                "stage": "done",
+                "message": "발행할 항목이 없습니다.",
+                "percent": 100,
+                "current": 0,
+                "total": 0,
+            },
+        )
         return {
             "subject": f"[AI 개발 데일리] {datetime.now().date()} - 발행할 항목 없음",
             "badge": "오늘은 수집된 아이템이 없습니다",
@@ -292,17 +334,38 @@ def build_daily_newsletter(limit: int = 8) -> dict:
     ai_used = False
     ai_errors: list[str] = []
     rendered = []
-    for item in picked:
+    total = len(picked)
+    for index, item in enumerate(picked, start=1):
+        _emit_progress(
+            progress_callback,
+            {
+                "stage": "summarizing",
+                "message": f"{index}/{total} 기사 요약 중: {item.get('title', '')[:60]}",
+                "percent": 20 + int((index - 1) / max(total, 1) * 70),
+                "current": index - 1,
+                "total": total,
+            },
+        )
         lines, used_ai, translated_title, ai_error = _summarize_item(item, summarizer)
         ai_used = ai_used or used_ai
         if ai_error:
             ai_errors.append(ai_error)
         display_title = translated_title or item.get("title", "")
         rendered.append(_to_view(item, lines, display_title))
+        _emit_progress(
+            progress_callback,
+            {
+                "stage": "item_done",
+                "message": f"{index}/{total} 기사 완료",
+                "percent": 20 + int(index / max(total, 1) * 70),
+                "current": index,
+                "total": total,
+            },
+        )
 
     hot = rendered[:2]
     bottom = rendered[2:]
-    return {
+    result = {
         "subject": f"[AI 개발 데일리] {datetime.now().date()} - 오늘의 핵심 {len(rendered)}개",
         "badge": f"오늘은 검증 통과 {len(rendered)}개 발행",
         "hot": hot,
@@ -310,3 +373,15 @@ def build_daily_newsletter(limit: int = 8) -> dict:
         "ai_used": ai_used,
         "ai_error": "" if ai_used else (ai_errors[0] if ai_errors else ""),
     }
+    _emit_progress(
+        progress_callback,
+        {
+            "stage": "done",
+            "message": "프리뷰 생성이 완료되었습니다.",
+            "percent": 100,
+            "current": len(rendered),
+            "total": len(rendered),
+            "ai_used": ai_used,
+        },
+    )
+    return result

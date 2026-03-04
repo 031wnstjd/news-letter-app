@@ -166,3 +166,49 @@ def test_preview_exposes_ai_error_when_all_ai_calls_fail(monkeypatch):
     result = build_daily_newsletter(limit=1)
     assert result['ai_used'] is False
     assert "OPENAI_API_KEY" in result['ai_error']
+
+
+def test_preview_reports_progress_events(monkeypatch):
+    monkeypatch.setattr(
+        'newsletter_api.newsletter.pipeline._collect_candidates',
+        lambda *args, **kwargs: [
+            {
+                'title': '테스트 제목',
+                'url': 'https://example.com/a',
+                'summary': '테스트 요약',
+                'published': '',
+                'source_domain': 'example.com',
+                'category': 'LLM/Agent',
+                'trust_tier': 'T1',
+                'canonical_url': 'https://example.com/a',
+                'age_hours': 1,
+                'score': 0.9,
+            }
+        ],
+    )
+    monkeypatch.setattr('newsletter_api.newsletter.pipeline.fetch_article_text', lambda _url: "")
+
+    def fake_ok(_self, title, source_text, url):
+        return SummaryResult(
+            lines=[
+                '리드: 요약 리드',
+                '무엇이 나왔나: 변경 1',
+                '핵심 사실: 사실 1',
+                '중요한 이유: 이유 1',
+                '실무 적용: 적용 1',
+                '주의사항: 주의 1',
+            ],
+            ok=True,
+            translated_title='번역된 제목',
+        )
+
+    monkeypatch.setattr('newsletter_api.newsletter.pipeline.AISummarizer.summarize_item', fake_ok)
+
+    events = []
+    result = build_daily_newsletter(limit=1, progress_callback=lambda payload: events.append(payload))
+    assert result['ai_used'] is True
+    stages = [event.get('stage') for event in events]
+    assert 'start' in stages
+    assert 'collect_done' in stages
+    assert 'summarizing' in stages
+    assert 'done' in stages
