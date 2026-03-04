@@ -6,6 +6,9 @@ def test_fallback_summary_lines_are_korean():
     result = summarize_text('Engineers shipped a new distributed runtime update.')
     assert result.ok is True
     assert any('핵심' in line or '중요' in line or '적용' in line for line in result.lines)
+    assert any(line.startswith('핵심 내용:') for line in result.lines)
+    assert any(line.startswith('리스크:') for line in result.lines)
+    assert any(line.startswith('실행 체크:') for line in result.lines)
 
 
 def test_fallback_summary_reflects_input_text():
@@ -71,8 +74,10 @@ def test_preview_prefers_korean_translated_title(monkeypatch):
     result = build_daily_newsletter(limit=2)
     assert result['hot'][0]['title'] == '번역된 제목'
     assert result['subject'].startswith('[AI 개발 데일리]')
-    assert "### 핵심 요약" in result['hot'][0]['markdown']
-    assert "### 실무 적용" in result['hot'][0]['markdown']
+    assert "### 한눈에 보기" in result['hot'][0]['markdown']
+    assert "### 기사 핵심 내용" in result['hot'][0]['markdown']
+    assert "### 실무 적용 체크리스트" in result['hot'][0]['markdown']
+    assert "### 리스크·주의사항" in result['hot'][0]['markdown']
 
 
 def test_preview_uses_article_body_for_ai_input(monkeypatch):
@@ -103,7 +108,15 @@ def test_preview_uses_article_body_for_ai_input(monkeypatch):
     def fake_summarize_item(_self, title, source_text, url):
         captured['source_text'] = source_text
         return SummaryResult(
-            lines=['요약 1', '요약 2', '왜 중요한가', '실무 적용', '세부 포인트 1'],
+            lines=[
+                '핵심 요약 1: 요약 1',
+                '핵심 요약 2: 요약 2',
+                '왜 중요한가: 왜 중요한가',
+                '실무 적용: 실무 적용',
+                '핵심 내용: 세부 포인트 1',
+                '리스크: 리스크 1',
+                '실행 체크: 체크 1',
+            ],
             ok=True,
             translated_title='번역된 제목',
         )
@@ -113,8 +126,9 @@ def test_preview_uses_article_body_for_ai_input(monkeypatch):
     result = build_daily_newsletter(limit=1)
     assert "실제 본문 내용" in captured['source_text']
     assert "RSS 요약 텍스트" in captured['source_text']
-    assert len(result['hot'][0]['lines']) >= 4
+    assert len(result['hot'][0]['lines']) >= 7
     assert "### 참고" in result['hot'][0]['markdown']
+    assert "### 리스크·주의사항" in result['hot'][0]['markdown']
 
 
 def test_preview_exposes_ai_error_when_all_ai_calls_fail(monkeypatch):

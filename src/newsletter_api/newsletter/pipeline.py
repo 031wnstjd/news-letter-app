@@ -142,25 +142,56 @@ def _summarize_item(item: dict, summarizer: AISummarizer) -> tuple[list[str], bo
     return fallback.lines, False, "", ai_result.error
 
 
+def _strip_label(text: str) -> str:
+    for prefix in ("핵심 요약 1:", "핵심 요약 2:", "왜 중요한가:", "실무 적용:", "핵심 내용:", "리스크:", "실행 체크:"):
+        if text.startswith(prefix):
+            return text[len(prefix) :].strip()
+    return text.strip()
+
+
+def _split_detail_sections(lines: list[str]) -> tuple[list[str], list[str], list[str]]:
+    core_points: list[str] = []
+    risks: list[str] = []
+    check_items: list[str] = []
+    for line in lines[4:]:
+        if line.startswith("리스크:"):
+            risks.append(_strip_label(line))
+            continue
+        if line.startswith("실행 체크:"):
+            check_items.append(_strip_label(line))
+            continue
+        core_points.append(_strip_label(line))
+    return core_points, risks, check_items
+
+
 def _to_view(item: dict, lines: list[str], display_title: str) -> dict:
     tldr = " ".join(lines[:2]).strip() if lines else ""
-    summary_points = [line for line in lines[:2] if line]
-    why_it_matters = lines[2] if len(lines) > 2 else ""
-    practical_apply = lines[3] if len(lines) > 3 else ""
-    detail_points = lines[4:] if len(lines) > 4 else []
+    summary_points = [_strip_label(line) for line in lines[:2] if line]
+    why_it_matters = _strip_label(lines[2]) if len(lines) > 2 else ""
+    practical_apply = _strip_label(lines[3]) if len(lines) > 3 else ""
+    core_points, risks, check_items = _split_detail_sections(lines)
 
-    markdown_lines = ["### 핵심 요약"]
+    markdown_lines = ["### 한눈에 보기"]
     if summary_points:
         markdown_lines.extend(f"- {point}" for point in summary_points)
     else:
         markdown_lines.append("- 핵심 요약을 생성하지 못했습니다.")
-    markdown_lines.extend(["", "### 왜 중요한가", why_it_matters or "현재 이슈의 영향 범위를 추가 검토해야 합니다.", ""])
-    markdown_lines.append("### 실무 적용")
-    apply_steps = [step for step in [practical_apply, *detail_points] if step and step.strip()]
-    if apply_steps:
-        markdown_lines.extend(f"{idx}. {step}" for idx, step in enumerate(apply_steps, start=1))
+    markdown_lines.extend(["", "### 기사 핵심 내용"])
+    if core_points:
+        markdown_lines.extend(f"- {point}" for point in core_points)
     else:
+        markdown_lines.append("- 본문 핵심 포인트를 추출하지 못했습니다.")
+    markdown_lines.extend(["", "### 왜 중요한가", why_it_matters or "현재 이슈의 영향 범위를 추가 검토해야 합니다.", ""])
+    markdown_lines.append("### 실무 적용 체크리스트")
+    apply_steps = [step for step in [practical_apply, *check_items] if step and step.strip()]
+    markdown_lines.extend(f"{idx}. {step}" for idx, step in enumerate(apply_steps, start=1))
+    if not apply_steps:
         markdown_lines.append("1. 원문 근거를 다시 확인한 뒤 적용 여부를 판단하세요.")
+    markdown_lines.extend(["", "### 리스크·주의사항"])
+    if risks:
+        markdown_lines.extend(f"- {risk}" for risk in risks)
+    else:
+        markdown_lines.append("- 운영 환경 반영 전 영향 범위와 롤백 전략을 함께 점검하세요.")
     markdown_lines.extend(
         [
             "",
